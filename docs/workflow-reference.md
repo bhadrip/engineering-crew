@@ -22,6 +22,33 @@ and epics, `run show <run>` for the run record, and
 `artifact read <run> <artifact>` for a specific attachment.
 `task dispatch --events` emits machine-readable attempt events.
 
+## Triage a brief and assign a team
+
+New runs default to static triage. At creation, the run records each task's
+configured `profileId` and starts the assignments with no prerequisites.
+To require a decision at intake, add
+`"triage": { "mode": "manual", "owners": ["SDM", "Tech Lead"] }` to the project
+JSON. Use `triage.briefInput` to select the input ID if it differs from
+`brief`. Add `alternateProfiles` to a task to let the owner choose from other
+profiles configured in that project. Each task's `profileId` remains its default.
+
+Open **Triage** in the epic to read the pinned brief and choose **Confirm and
+start**. This records the selected owner, reason, brief digest, and profile
+revisions, then opens **Workflow** with the initial assignments underway.
+
+```sh
+node bin/crew.mjs run triage epic-2 --owner "Tech Lead" \
+  --note "Assign the interactive prototype to the frontend specialist." \
+  --assign website-build=frontend-engineer
+node bin/crew.mjs artifact read epic-2 triage-decision
+```
+
+Omit `--assign` to confirm the defaults, or repeat it for multiple tasks.
+The CLI waits for the initial assignments to return. Use `--events` to
+receive their attempt IDs as soon as they start, or `--no-dispatch` on
+`run start` or `run triage` to prepare a run for manual dispatch. Dependent
+tasks become available to dispatch after their required handoffs are accepted.
+
 ## Review and fix a candidate
 
 An implementation review reports findings on a specific candidate diff. A

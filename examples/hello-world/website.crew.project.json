@@ -12,6 +12,10 @@
     "title": "Plan the catalog website",
     "goal": "Plan, build, and review a catalog website prototype for Pet Store."
   },
+  "triage": {
+    "mode": "manual",
+    "owners": ["SDM", "Tech Lead", "Principal Engineer"]
+  },
   "inputs": [
     {
       "id": "brief",
@@ -70,6 +74,15 @@
       "revision": 2,
       "name": "Software Engineer",
       "remit": "Return scoped implementation and author tests.",
+      "instructions": "examples/hello-world/crew/engineer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "frontend-engineer",
+      "revision": 1,
+      "name": "Frontend Engineer",
+      "remit": "Implement the responsive website prototype and its interaction states.",
       "instructions": "examples/hello-world/crew/engineer.md",
       "skills": [],
       "tools": []
@@ -239,6 +252,7 @@
       "revision": 1,
       "title": "Build website prototype",
       "profileId": "engineer",
+      "alternateProfiles": ["frontend-engineer"],
       "objective": "Implement the approved design as a self-contained catalog prototype in the supplied HTML file. Match the fictional CLI data. Use the committed smoke test as a minimum source check and note remaining browser validation.",
       "criteria": [
         "WEB-1",

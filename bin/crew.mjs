@@ -3,15 +3,16 @@ import { parseArgs } from 'node:util';
 import { CrewError, id, requireField } from '../lib/contracts.mjs';
 import { gitControl, readProject } from '../lib/git-control.mjs';
 import { listRuns, runStore } from '../lib/run-store.mjs';
-import { attachCandidateDiff, decide, dispatch, findArtifact, newRun, publishAttemptTrace, requestFix, summarize, workspaceCatalog } from '../lib/workflow.mjs';
+import { attachCandidateDiff, decide, dispatch, dispatchInitial, findArtifact, newRun, publishAttemptTrace, requestFix, summarize, triageRun, workspaceCatalog } from '../lib/workflow.mjs';
 
 const usage = `Engineering Crew
 
 crew project validate --project <Git path> [--ref <ref>]
 crew project show --project <Git path> [--ref <ref>]
 crew workspace show
-crew run start <run> --project <Git path> [--ref <ref>]
+crew run start <run> --project <Git path> [--ref <ref>] [--no-dispatch] [--events]
 crew run show <run>
+crew run triage <run> --owner <owner> --note <reason> [--assign <task=profile>]... [--no-dispatch] [--events]
 crew run fix <run> <build-attempt> --note <reason>
 crew task dispatch <run> <task> [--events] [--capture-activity]
 crew task decide <run> <task> <attempt> <accepted|rework> --note <reason>
@@ -26,6 +27,26 @@ function emit(data, compact = false) {
   process.stdout.write(`${JSON.stringify({ schemaVersion: 1, ...data }, null, compact ? 0 : 2)}\n`);
 }
 
+async function withAttemptSignal(execute) {
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop);
+  try { return await execute(controller.signal); }
+  finally {
+    for (const signal of ['SIGINT', 'SIGTERM']) process.off(signal, stop);
+  }
+}
+
+const unsuccessful = attempt => attempt.outcome !== 'completed' || attempt.result?.state !== 'completed';
+
+async function kickOff(store, runId, control, values) {
+  if (values['no-dispatch']) return;
+  const onStart = values.events ? attempts => emit({ event: 'run.kickoff', runId, attempts }, true) : undefined;
+  const attempts = await withAttemptSignal(signal => dispatchInitial(store, signal, onStart, undefined, control,
+    { captureActivity: values['capture-activity'] }));
+  if (attempts.some(unsuccessful)) process.exitCode = 5;
+}
+
 async function main() {
   let parsed;
   try {
@@ -33,14 +54,15 @@ async function main() {
       repo: { type: 'string', default: process.cwd() }, project: { type: 'string' },
       'project-id': { type: 'string' },
       ref: { type: 'string', default: 'HEAD' }, note: { type: 'string' }, port: { type: 'string' }, attempt: { type: 'string' },
-      events: { type: 'boolean' }, 'capture-activity': { type: 'boolean' }, 'include-activity': { type: 'boolean' },
+      owner: { type: 'string' }, assign: { type: 'string', multiple: true, default: [] },
+      events: { type: 'boolean' }, 'no-dispatch': { type: 'boolean' }, 'capture-activity': { type: 'boolean' }, 'include-activity': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     } });
   } catch (error) { throw new CrewError(error.message, 2); }
   const { values, positionals } = parsed;
   if (values.help || !positionals.length) { process.stdout.write(`${usage}\n`); return; }
   const [group, action, ...args] = positionals;
-  const expected = { 'project validate': 0, 'project show': 0, 'workspace show': 0, 'run start': 1, 'run show': 1, 'run fix': 2,
+  const expected = { 'project validate': 0, 'project show': 0, 'workspace show': 0, 'run start': 1, 'run show': 1, 'run triage': 1, 'run fix': 2,
     'task dispatch': 2, 'task decide': 4, 'task attach-diff': 3, 'artifact read': 2, 'trace publish': 2 };
   const command = `${group} ${action}`;
   if (!(group === 'ui' && positionals.length <= 2) && expected[command] !== args.length) {
@@ -56,8 +78,10 @@ async function main() {
     if (command === 'project show') return emit({ project, sourceCommit, path: values.project });
     const runId = id(args[0], 'run ID');
     const run = newRun(snapshot, runId, values.project);
-    await runStore(control.gitDir, runId).create(run);
-    return emit({ run: summarize(run) });
+    const store = runStore(control.gitDir, runId);
+    await store.create(run);
+    if (run.triage.status === 'assigned') await kickOff(store, runId, control, values);
+    return emit({ run: summarize(await store.read()) }, values.events);
   }
   if (group === 'ui') {
     const runProject = action ? (await runStore(control.gitDir, action).read()).project.id : undefined;
@@ -73,6 +97,16 @@ async function main() {
   const [runId, taskId, attemptId, disposition] = args;
   const store = runStore(control.gitDir, runId);
   if (command === 'run show') return emit({ run: summarize(await store.read()) });
+  if (command === 'run triage') {
+    const overrides = values.assign.map(value => {
+      const [taskId, profileId, extra] = value.split('=');
+      requireField(extra === undefined, 'Assignments must use task=profile');
+      return { taskId: id(taskId, 'assignment task ID'), profileId: id(profileId, 'assignment profile ID') };
+    });
+    const triage = await triageRun(store, values.owner, values.note, overrides);
+    await kickOff(store, runId, control, values);
+    return emit({ triage }, values.events);
+  }
   if (command === 'run fix') return emit({ fixLoop: await requestFix(store, taskId, values.note) });
   if (command === 'artifact read') return emit({ artifact: findArtifact(await store.read(), taskId) });
   if (command === 'trace publish') return emit({ trace: await publishAttemptTrace(store, control, taskId, values.attempt, process.env,
@@ -80,18 +114,11 @@ async function main() {
   if (command === 'task decide') return emit({ decision: await decide(store, taskId, attemptId, disposition, values.note) });
   if (command === 'task attach-diff') return emit({ revision: await attachCandidateDiff(store, control, taskId, attemptId) });
 
-  const controller = new AbortController();
-  const stop = () => controller.abort();
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop);
-  try {
-    const onStart = values.events ? attemptId => emit({ event: 'attempt.started', attemptId }, true) : undefined;
-    const attempt = await dispatch(store, taskId, controller.signal, onStart, undefined, control,
-      { captureActivity: values['capture-activity'] });
-    emit(values.events ? { event: 'attempt.finished', attempt } : { attempt }, values.events);
-    if (attempt.outcome !== 'completed' || attempt.result?.state !== 'completed') process.exitCode = 5;
-  } finally {
-    for (const signal of ['SIGINT', 'SIGTERM']) process.off(signal, stop);
-  }
+  const onStart = values.events ? attemptId => emit({ event: 'attempt.started', attemptId }, true) : undefined;
+  const attempt = await withAttemptSignal(signal => dispatch(store, taskId, signal, onStart, undefined, control,
+    { captureActivity: values['capture-activity'] }));
+  emit(values.events ? { event: 'attempt.finished', attempt } : { attempt }, values.events);
+  if (unsuccessful(attempt)) process.exitCode = 5;
 }
 
 main().catch(error => {

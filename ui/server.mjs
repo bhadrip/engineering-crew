@@ -26,9 +26,9 @@ async function call(repo, args) {
   return JSON.parse(stdout);
 }
 
-function beginDispatch(repo, runId, taskId) {
+function beginCommand(repo, args, startEvent) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [command, '--repo', repo, 'task', 'dispatch', runId, taskId, '--events'],
+    const child = spawn(process.execPath, [command, '--repo', repo, ...args, '--events'],
       { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -40,9 +40,9 @@ function beginDispatch(repo, runId, taskId) {
       if (boundary < 0) return;
       try {
         const event = JSON.parse(stdout.slice(0, boundary));
-        if (event.event === 'attempt.started') {
+        if (event.event === startEvent) {
           started = true;
-          resolve(event.attemptId);
+          resolve(event);
         }
       } catch { reject(new CrewError('The attempt could not be confirmed')); }
     });
@@ -52,7 +52,7 @@ function beginDispatch(repo, runId, taskId) {
   });
 }
 
-async function readForm(request) {
+async function readForm(request, limit = 12_000) {
   if (!request.headers['content-type']?.startsWith('application/x-www-form-urlencoded')) {
     throw new CrewError('Expected a form submission');
   }
@@ -60,7 +60,7 @@ async function readForm(request) {
   let length = 0;
   for await (const chunk of request) {
     length += chunk.length;
-    if (length > 12_000) throw new CrewError('Form is too large');
+    if (length > limit) throw new CrewError('Form is too large');
     chunks.push(chunk);
   }
   return new URLSearchParams(Buffer.concat(chunks).toString());
@@ -98,8 +98,8 @@ export async function serve({ repo, projectId, port }) {
     try {
       const url = new URL(request.url, origin);
       const projectRoute = /^\/projects\/([a-z0-9-]+)(?:(\/agents)|\/epics\/([a-z0-9-]+))?$/.exec(url.pathname);
-      const runRoute = /^\/runs\/([a-z0-9-]+)(?:\/(tasks|artifacts)\/([a-z0-9-]+)|\/(fix))?$/.exec(url.pathname);
-      const [, selectedRun, section, item, fix] = runRoute ?? [];
+      const runRoute = /^\/runs\/([a-z0-9-]+)(?:\/(tasks|artifacts)\/([a-z0-9-]+)|\/(fix|triage))?$/.exec(url.pathname);
+      const [, selectedRun, section, item, runAction] = runRoute ?? [];
       if (request.method === 'GET') {
         if (url.pathname === '/crew.css') return send(response, 200, stylesheet, 'text/css');
         if (url.pathname === '/crew.js') return send(response, 200, browserScript, 'text/javascript');
@@ -142,28 +142,38 @@ export async function serve({ repo, projectId, port }) {
           const task = run.tasks.find(value => value.packet.id === fromTask);
           return send(response, 200, artifactPage(artifact, run, task?.packet.id, url.searchParams.get('view')));
         }
-        if (selectedRun) {
+        if (selectedRun && !runAction) {
           const run = await readProjectRun(selectedRun);
           const selection = item ? run.tasks.find(value => value.packet.id === item) : run.tasks[0];
           if (selection) return send(response, 200, runPage(run, selection));
         }
       }
-      if (request.method === 'POST' && (section === 'tasks' || fix)) {
+      if (request.method === 'POST' && (section === 'tasks' || runAction)) {
         if (request.headers.origin !== origin) return send(response, 403, errorPage('Open the crew UI before submitting a decision.'));
         const run = await readProjectRun(selectedRun);
-        const form = await readForm(request);
-        if (fix) {
+        const form = await readForm(request, runAction === 'triage' ? 24_000 : undefined);
+        if (runAction === 'triage') {
+          const assignments = [...form].filter(([key]) => key.startsWith('assignment-'))
+            .map(([key, profileId]) => `--assign=${key.slice('assignment-'.length)}=${profileId}`);
+          const kickoff = await beginCommand(repo, ['run', 'triage', selectedRun, `--owner=${form.get('owner') ?? ''}`,
+            `--note=${form.get('note') ?? ''}`, ...assignments], 'run.kickoff');
+          const view = new URLSearchParams({ run: run.id, view: 'workflow' });
+          if (kickoff.attempts.length) view.set('step', kickoff.attempts[0].taskId);
+          const location = `/projects/${run.project.id}/epics/${run.epic.id}?${view}`;
+          return send(response, 303, '', 'text/plain', { Location: location });
+        }
+        if (runAction === 'fix') {
           const attempt = form.get('attempt');
           if (!/^[a-f0-9-]{36}$/.test(attempt ?? '')) throw new CrewError('Invalid build attempt');
           await call(repo, ['run', 'fix', selectedRun, attempt, `--note=${form.get('note') ?? ''}`]);
           const location = `/projects/${run.project.id}/epics/${run.epic.id}?run=${run.id}&view=reviews`;
           return send(response, 303, '', 'text/plain', { Location: location });
         }
-        if (form.get('action') === 'dispatch') await beginDispatch(repo, selectedRun, id(item, 'task ID'));
-        else if (form.get('action') === 'attach-diff') {
+        if (form.get('action') === 'dispatch') {
+          await beginCommand(repo, ['task', 'dispatch', selectedRun, id(item, 'task ID')], 'attempt.started');
+        } else if (form.get('action') === 'attach-diff') {
           await call(repo, ['task', 'attach-diff', selectedRun, item, id(form.get('build'), 'build task ID')]);
-        }
-        else if (form.get('action') === 'decide') {
+        } else if (form.get('action') === 'decide') {
           const attempt = form.get('attempt');
           const disposition = form.get('disposition');
           if (!/^[a-f0-9-]{36}$/.test(attempt ?? '') || !['accepted', 'rework'].includes(disposition)) {

@@ -12,18 +12,21 @@ Pet Store pilot runs within a single Git checkout.
 
 ## How the crew works
 
-1. **Plan the work.** The brief defines the outcome and acceptance criteria.
+1. **Triage the brief.** A configured owner reviews the pinned brief and
+   confirms the team. Projects with a standing team use the assignments in
+   Git. The first assignments start once the team is set.
+2. **Plan the work.** The brief defines the outcome and acceptance criteria.
    Specialist agents contribute scoped reviews and a lead turns them into an
    implementation plan. Each assignment receives pinned inputs and has a
    named owner for the handoff decision.
-2. **Build a candidate.** The engineer agent returns the source for its assigned
+3. **Build a candidate.** The engineer agent returns the source for its assigned
    files. Crew turns those outputs into an isolated Git candidate. Codex runs
    the agent assignments, and Crew runs the candidate and its configured
    checks in local Docker.
-3. **Verify independently.** QA supplies its own cases and checks what the
+4. **Verify independently.** QA supplies its own cases and checks what the
    candidate actually does. Design and security specialists review the changes
    and record findings separately from the build.
-4. **Fix or hand off.** The lead routes blocking findings to the implementer.
+5. **Fix or hand off.** The lead routes blocking findings to the implementer.
    The crew checks the revised candidate before handoff. The run retains the
    candidate diff, check results, and decisions so the project owner can
    review the outcome.
@@ -88,14 +91,16 @@ node bin/crew.mjs run start epic-2 --project examples/hello-world/website.crew.p
 node bin/crew.mjs ui
 ```
 
-Open the local URL printed by the CLI, select an epic, and dispatch the first
-available assignment from **Workflow**. Review its evidence and record your
-decision. As you accept handoffs, dependent assignments become available.
+Open the local URL printed by the CLI and select an epic. The catalog command
+starts its first assignments with the standing team. For the website, open
+the pinned brief in **Triage**, select an owner, and choose **Confirm and start**.
+Review the results in **Workflow**. As you accept handoffs, dependent
+assignments become available to dispatch.
 
 ## Reference
 
-- [Workflow reference](docs/workflow-reference.md) covers replay, fix loops,
-  run records, and usage.
+- [Workflow reference](docs/workflow-reference.md) covers triage, replay,
+  fix loops, run records, and usage.
 - [Design and contracts](docs/design/engineering-crew.md) describes the
   execution boundaries and handoffs.
 - [Agent development and evals](docs/agent-development.md) shows how to build
