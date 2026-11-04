@@ -1,15 +1,30 @@
 # Engineering Crew
 
-Engineering Crew turns a work brief into a reviewed change you can open as a
-pull request. It splits the work into assignments for specialist agents, runs
-them in sandboxed Codex sessions, and brings in independent reviewers to check
-the same change from multiple angles.
+Engineering Crew coordinates specialist agents to turn a work brief into a
+working solution. The intended delivery model spans the repositories the
+solution needs, with QA running the result in a local sandbox before handoff.
 
-![Engineering Crew workflow. A work brief is split among specialist agents running in sandboxed Codex sessions. Independent reviewers check the change before pull request handoff. The browser UI provides workflow controls, and Langfuse provides optional tracing.](docs/engineering-crew-overview.png)
+![Delivery model. A specialist crew takes a brief and an engineer agent on Codex implements across repositories. QA runs the solution in a local sandbox while design and security review the changes. Blockers go back to the implementer for another round of verification.](docs/engineering-crew-overview.png)
 
-Define roles and handoffs in Git. Use the browser UI to dispatch tasks and
-follow reviews, with [optional Langfuse tracing](docs/langfuse.md) for a closer
-look.
+Codex runs the agent assignments. The engineer owns implementation, and design
+and security review the changes independently. When verification surfaces a
+blocker, the lead sends it back to the engineer and the crew checks the revised
+candidate.
+
+The current **Pet Store** pilot runs in a single checkout. Its catalog command
+demonstrates independent Docker QA. Its website demonstrates the design and
+security fix loop alongside a Docker source smoke test.
+
+## Configure, run, and trace
+
+![Git configuration defines roles, handoffs, and required checks. In the browser UI, dispatch tasks, inspect evidence, and accept handoffs or request rework. Optional CLI export to Langfuse gives the run links to verified traces.](docs/engineering-crew-controls.png)
+
+Define roles, handoffs, and checks in Git. Use the browser UI to dispatch
+assignments, inspect evidence, and accept handoffs or request rework. To drill
+into a selected attempt, publish its Codex receipt from the CLI and open the
+verified Langfuse link in the run. Optional activity capture can also include
+the prompt, response, and Docker results.
+[Langfuse setup](docs/langfuse.md)
 
 ## Run the pilot
 
