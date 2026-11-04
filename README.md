@@ -42,6 +42,10 @@ and reported usage when available. The build runner creates an isolated Git
 candidate ref. Separate Docker receipts record the author tests and independent
 QA outcomes on that same commit.
 
+Publish a Codex receipt or opt in to capturing and publishing the prompt,
+response, and runner checks for a handoff. Verified traces appear in the epic
+view. [Langfuse setup](docs/langfuse.md)
+
 Codex profiles receive only the inputs in their task packets. Configure roles,
 dependencies, allowed build outputs, and verification in the project JSON.
 The preview runs locally. If the checkout has runs for multiple projects,

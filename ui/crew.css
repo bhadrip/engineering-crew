@@ -169,6 +169,8 @@ textarea { width: 100%; resize: vertical; padding: .4rem; border: 1px solid #cbd
 .records, .grid { display: grid; gap: .85rem; }
 .grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .links a { display: flex; justify-content: space-between; gap: .45rem; padding: .35rem 0; overflow-wrap: anywhere; }
+.trace-link { border-top: 1px solid var(--line); }
+.trace-state { margin: .35rem 0; font-size: .85rem; }
 .workflow a { display: block; }
 .workflow [aria-current] { font-weight: 650; }
 .workflow span { display: block; color: var(--muted); font-size: .78rem; }
