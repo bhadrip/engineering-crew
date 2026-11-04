@@ -10,19 +10,34 @@
   "epic": {
     "id": "epic-2",
     "title": "Plan the catalog website",
-    "goal": "Prepare a Pet Store website plan informed by UX and visual design reviews."
+    "goal": "Plan, build, and review a catalog website prototype for Pet Store."
   },
   "inputs": [
     {
       "id": "brief",
       "title": "Catalog website brief",
       "path": "examples/hello-world/pet-store-website-brief.md"
+    },
+    {
+      "id": "website-source",
+      "title": "Website baseline",
+      "path": "examples/hello-world/website/index.html"
+    },
+    {
+      "id": "website-smoke",
+      "title": "Website source smoke test",
+      "path": "examples/hello-world/website/smoke.mjs"
+    },
+    {
+      "id": "cli-catalog",
+      "title": "CLI catalog reference",
+      "path": "examples/hello-world/hello.mjs"
     }
   ],
   "profiles": [
     {
       "id": "ux-designer",
-      "revision": 1,
+      "revision": 2,
       "name": "UX Designer",
       "remit": "Review visitor flows, interaction states, and accessibility.",
       "instructions": "examples/hello-world/crew/ux-designer.md",
@@ -31,7 +46,7 @@
     },
     {
       "id": "visual-designer",
-      "revision": 1,
+      "revision": 2,
       "name": "Visual Designer",
       "remit": "Review visual hierarchy, typography, color, and responsive layout.",
       "instructions": "examples/hello-world/crew/visual-designer.md",
@@ -44,6 +59,33 @@
       "name": "Software Development Manager",
       "remit": "Agree the plan, route work, and hand the candidate to QA.",
       "instructions": "examples/hello-world/crew/sdm.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "engineer",
+      "revision": 2,
+      "name": "Software Engineer",
+      "remit": "Return scoped implementation and author tests.",
+      "instructions": "examples/hello-world/crew/engineer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "lead-designer",
+      "revision": 1,
+      "name": "Lead Designer",
+      "remit": "Review design coherence across UX and visual decisions.",
+      "instructions": "examples/hello-world/crew/lead-designer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "security-engineer",
+      "revision": 1,
+      "name": "Security Engineer",
+      "remit": "Review the candidate for security regressions and deferred hardening.",
+      "instructions": "examples/hello-world/crew/security-engineer.md",
       "skills": [],
       "tools": []
     }
@@ -186,6 +228,418 @@
         ]
       },
       "acceptedBy": "Project owner"
+    },
+    {
+      "id": "website-build",
+      "revision": 1,
+      "title": "Build website prototype",
+      "profileId": "engineer",
+      "objective": "Implement the approved design as a self-contained catalog prototype in the supplied HTML file. Match the fictional CLI data. Use the committed smoke test as a minimum source check and note remaining browser validation.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "website-plan"
+      ],
+      "inputs": [
+        "website-source",
+        "website-smoke",
+        "cli-catalog"
+      ],
+      "handoffInputs": [
+        {
+          "task": "website-plan",
+          "slot": "build-plan"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "website",
+          "title": "Candidate website source",
+          "kind": "source",
+          "required": true,
+          "acceptance": "Return the full HTML document with semantic structure, filtering, and responsive styling.",
+          "path": "examples/hello-world/website/index.html"
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/website/index.html",
+          "examples/hello-world/website/smoke.mjs",
+          "examples/hello-world/hello.mjs"
+        ]
+      },
+      "acceptedBy": "SDM",
+      "execution": {
+        "kind": "build",
+        "image": "node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914",
+        "entry": "examples/hello-world/website/index.html",
+        "tests": "examples/hello-world/website/smoke.mjs",
+        "files": [
+          "examples/hello-world/website/index.html",
+          "examples/hello-world/website/smoke.mjs"
+        ]
+      }
+    },
+    {
+      "id": "ux-implementation-review",
+      "revision": 1,
+      "title": "UX implementation review",
+      "profileId": "ux-designer",
+      "objective": "Review visitor flow, filter behavior, semantics, and accessibility on the pinned candidate against your accepted design and the SDM plan. Identify blockers and defer minor polish. Limit conclusions to the source and receipts provided.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "ux-review",
+        "website-plan",
+        "website-build"
+      ],
+      "inputs": [
+        "website-source"
+      ],
+      "handoffInputs": [
+        {
+          "task": "ux-review",
+          "slot": "ux-spec"
+        },
+        {
+          "task": "website-plan",
+          "slot": "build-plan"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate-diff"
+        },
+        {
+          "task": "website-build",
+          "slot": "check-receipt"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "findings",
+          "title": "Implementation findings",
+          "kind": "review-findings",
+          "required": true,
+          "acceptance": "Record source-backed findings with severity blocker or backlog. State where browser evidence is needed."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/website/index.html"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "visual-implementation-review",
+      "revision": 1,
+      "title": "Visual implementation review",
+      "profileId": "visual-designer",
+      "objective": "Review visual hierarchy, typography, contrast, and responsive styles on the pinned candidate against your accepted design and the SDM plan. Identify blockers and defer minor polish. Limit conclusions to the source and receipts provided.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "visual-review",
+        "website-plan",
+        "website-build"
+      ],
+      "inputs": [
+        "website-source"
+      ],
+      "handoffInputs": [
+        {
+          "task": "visual-review",
+          "slot": "visual-spec"
+        },
+        {
+          "task": "website-plan",
+          "slot": "build-plan"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate-diff"
+        },
+        {
+          "task": "website-build",
+          "slot": "check-receipt"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "findings",
+          "title": "Implementation findings",
+          "kind": "review-findings",
+          "required": true,
+          "acceptance": "Record source-backed findings with severity blocker or backlog. State where browser evidence is needed."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/website/index.html"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "lead-designer-review",
+      "revision": 1,
+      "title": "Lead design review",
+      "profileId": "lead-designer",
+      "objective": "Review the pinned candidate for coherence across the two accepted design handoffs and the SDM plan.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "ux-review",
+        "visual-review",
+        "website-plan",
+        "website-build"
+      ],
+      "inputs": [
+        "website-source"
+      ],
+      "handoffInputs": [
+        {
+          "task": "ux-review",
+          "slot": "ux-spec"
+        },
+        {
+          "task": "visual-review",
+          "slot": "visual-spec"
+        },
+        {
+          "task": "website-plan",
+          "slot": "build-plan"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate-diff"
+        },
+        {
+          "task": "website-build",
+          "slot": "check-receipt"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "findings",
+          "title": "Implementation findings",
+          "kind": "review-findings",
+          "required": true,
+          "acceptance": "Record source-backed findings with severity blocker or backlog. State where browser evidence is needed."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/website/index.html"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "security-engineer-review",
+      "revision": 1,
+      "title": "Security review",
+      "profileId": "security-engineer",
+      "objective": "Review the pinned candidate for concrete security risks and scope changes. State which risks need runtime evidence.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "website-plan",
+        "website-build"
+      ],
+      "inputs": [
+        "website-source"
+      ],
+      "handoffInputs": [
+        {
+          "task": "website-plan",
+          "slot": "build-plan"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate"
+        },
+        {
+          "task": "website-build",
+          "slot": "candidate-diff"
+        },
+        {
+          "task": "website-build",
+          "slot": "check-receipt"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "findings",
+          "title": "Implementation findings",
+          "kind": "review-findings",
+          "required": true,
+          "acceptance": "Record source-backed findings with severity blocker or backlog. State where browser evidence is needed."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/website/index.html"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "website-delivery",
+      "revision": 1,
+      "title": "Website delivery review",
+      "profileId": "sdm",
+      "objective": "Summarize the accepted implementation reviews and the exact prototype candidate for the project owner. Record deferred work and any remaining browser validation.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "website-build",
+        "ux-implementation-review",
+        "visual-implementation-review",
+        "lead-designer-review",
+        "security-engineer-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "website-build",
+          "slot": "candidate"
+        },
+        {
+          "task": "website-build",
+          "slot": "check-receipt"
+        },
+        {
+          "task": "ux-implementation-review",
+          "slot": "findings"
+        },
+        {
+          "task": "visual-implementation-review",
+          "slot": "findings"
+        },
+        {
+          "task": "lead-designer-review",
+          "slot": "findings"
+        },
+        {
+          "task": "security-engineer-review",
+          "slot": "findings"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "delivery",
+          "title": "Website delivery notes",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Identify the candidate, review outcomes, and backlog with any limitations."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
     }
-  ]
+  ],
+  "orchestration": {
+    "buildTask": "website-build",
+    "reviewTasks": [
+      "ux-implementation-review",
+      "visual-implementation-review",
+      "lead-designer-review",
+      "security-engineer-review"
+    ],
+    "decisionOwner": "SDM",
+    "maxFixLoops": 1
+  }
 }

@@ -98,8 +98,8 @@ export async function serve({ repo, projectId, port }) {
     try {
       const url = new URL(request.url, origin);
       const projectRoute = /^\/projects\/([a-z0-9-]+)(?:(\/agents)|\/epics\/([a-z0-9-]+))?$/.exec(url.pathname);
-      const runRoute = /^\/runs\/([a-z0-9-]+)(?:\/(tasks|artifacts)\/([a-z0-9-]+))?$/.exec(url.pathname);
-      const [, selectedRun, section, item] = runRoute ?? [];
+      const runRoute = /^\/runs\/([a-z0-9-]+)(?:\/(tasks|artifacts)\/([a-z0-9-]+)|\/(fix))?$/.exec(url.pathname);
+      const [, selectedRun, section, item, fix] = runRoute ?? [];
       if (request.method === 'GET') {
         if (url.pathname === '/crew.css') return send(response, 200, stylesheet, 'text/css');
         if (url.pathname === '/crew.js') return send(response, 200, browserScript, 'text/javascript');
@@ -108,9 +108,19 @@ export async function serve({ repo, projectId, port }) {
           const { projects } = await call(repo, ['workspace', 'show']);
           const [, routeProject, agents, epicId] = projectRoute ?? [];
           const project = projects.find(project => project.id === selectedProject.id && (!routeProject || routeProject === project.id));
-          if (project && !epicId) return send(response, 200, projectPage(project, Boolean(agents), {
-            query, status: url.searchParams.get('status'),
-          }));
+          if (project && !epicId) {
+            const configurations = agents ? await Promise.all(project.epics.map(async epic => {
+              try {
+                const config = await call(repo, ['project', 'show', '--project', epic.configurationPath]);
+                if (config.project.id !== project.id || config.project.epic.id !== epic.id) throw new CrewError('Configuration belongs to another epic');
+                return { epic, ...config };
+              } catch (error) {
+                if (!(error instanceof CrewError)) throw error;
+                return { epic, error: error.message };
+              }
+            })) : [];
+            return send(response, 200, projectPage(project, Boolean(agents), { query, status: url.searchParams.get('status'), configurations }));
+          }
           const epic = project?.epics.find(epic => epic.id === epicId);
           if (epic) {
             const activeRun = url.searchParams.get('run') ?? epic.runs[0].id;
@@ -138,10 +148,17 @@ export async function serve({ repo, projectId, port }) {
           if (selection) return send(response, 200, runPage(run, selection));
         }
       }
-      if (request.method === 'POST' && section === 'tasks') {
+      if (request.method === 'POST' && (section === 'tasks' || fix)) {
         if (request.headers.origin !== origin) return send(response, 403, errorPage('Open the crew UI before submitting a decision.'));
-        await readProjectRun(selectedRun);
+        const run = await readProjectRun(selectedRun);
         const form = await readForm(request);
+        if (fix) {
+          const attempt = form.get('attempt');
+          if (!/^[a-f0-9-]{36}$/.test(attempt ?? '')) throw new CrewError('Invalid build attempt');
+          await call(repo, ['run', 'fix', selectedRun, attempt, `--note=${form.get('note') ?? ''}`]);
+          const location = `/projects/${run.project.id}/epics/${run.epic.id}?run=${run.id}&view=reviews`;
+          return send(response, 303, '', 'text/plain', { Location: location });
+        }
         if (form.get('action') === 'dispatch') await beginDispatch(repo, selectedRun, id(item, 'task ID'));
         else if (form.get('action') === 'attach-diff') {
           await call(repo, ['task', 'attach-diff', selectedRun, item, id(form.get('build'), 'build task ID')]);

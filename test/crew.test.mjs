@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { gitControl, readProject } from '../lib/git-control.mjs';
+import { candidateDiff, createCandidate, gitControl, readProject } from '../lib/git-control.mjs';
+import { currentAttempt } from '../lib/attempts.mjs';
 import { validateProject } from '../lib/contracts.mjs';
-import { runStore } from '../lib/run-store.mjs';
-import { decide, dispatch, findArtifact, newRun, summarize, workspaceCatalog } from '../lib/workflow.mjs';
+import { artifact, runStore } from '../lib/run-store.mjs';
+import { decide, dispatch, findArtifact, newRun, requestFix, summarize, workspaceCatalog } from '../lib/workflow.mjs';
 
 const config = 'examples/hello-world/crew.project.json';
 
@@ -143,4 +145,90 @@ test('task usage counts retries and leaves unpriced attempts visible', async t =
     estimatedUsd: 0.0021, unpricedAttempts: 1, attemptsMissingUsage: 1, overCostTarget: true });
   assert.equal(task.attempts[1].estimatedUsd, null);
   assert.equal(task.attempts[0].estimatedUsd, 0.0021);
+});
+
+test('implementation blockers gate delivery and a fix loop replaces only candidate-dependent handoffs', async t => {
+  const { control } = await fixture(t);
+  const websiteConfig = 'examples/hello-world/website.crew.project.json';
+  const snapshot = readProject(control, websiteConfig);
+  const run = newRun(snapshot, 'fix-test', websiteConfig);
+  const store = runStore(control.gitDir, run.id);
+  await store.create(run);
+  const completed = (slot, content) => ({
+    outcome: 'completed', receipt: {},
+    response: { state: 'completed', summary: 'Offline result', decisions: [], questions: [], blockers: [], outputs: [{ slot, content }] },
+  });
+  for (const [task, slot] of [['ux-review', 'ux-spec'], ['visual-review', 'visual-spec'], ['website-plan', 'build-plan']]) {
+    const attempt = await dispatch(store, task, undefined, undefined, async () => completed(slot, 'Approved planning artifact'));
+    await decide(store, task, attempt.id, 'accepted', 'Planning checked');
+  }
+  const buildId = run.orchestration.buildTask;
+  const [ux, visual, lead, security] = run.orchestration.reviewTasks;
+  const file = run.tasks.find(task => task.packet.id === buildId).packet.outputs[0].path;
+  async function seedBuild(content) {
+    const id = randomUUID();
+    const candidate = createCandidate(control, run.sourceCommit, `refs/crew/test/${id}`, [{ path: file, content }]);
+    await store.update(record => {
+      const task = record.tasks.find(task => task.packet.id === buildId);
+      const add = (slot, content) => {
+        const key = `${id}-${slot}`;
+        record.artifacts.push(artifact(key, slot, 'text', content, { source: 'runtime', attemptId: id }));
+        return key;
+      };
+      task.attempts.push({
+        id, number: task.attempts.length + 1, packetRevision: 1, outcome: 'completed', startedAt: new Date().toISOString(),
+        receiptId: add('receipt', '{}'), candidate, result: { state: 'completed', artifacts: { website: add('website', content) } },
+        runnerArtifacts: { candidate: add('candidate', JSON.stringify(candidate)), 'check-receipt': add('check-receipt', '{}'),
+          'candidate-diff': add('candidate-diff', candidateDiff(control, candidate)) },
+      });
+    });
+    await decide(store, buildId, id, 'accepted', 'Seeded candidate');
+    return { id, candidate };
+  }
+  const blocker = { id: 'filter-label', severity: 'blocker', title: 'Label the filter', evidence: 'The select has no label.' };
+  const backlog = { id: 'card-spacing', severity: 'backlog', title: 'Refine spacing', evidence: 'The cards use a tight gap.' };
+  const review = (task, findings) => dispatch(store, task, undefined, undefined,
+    async () => completed('findings', JSON.stringify(findings)));
+  const source = '<main>First candidate</main>';
+  const first = await seedBuild(source);
+  const blocked = await review(ux, [blocker]);
+  await assert.rejects(decide(store, ux, blocked.id, 'accepted', 'Accept'), /unresolved blockers/);
+  await assert.rejects(requestFix(store, first.id, 'Fix the filter'), /all implementation review findings/);
+  const deferred = await review(visual, [backlog]);
+  await decide(store, visual, deferred.id, 'accepted', 'Polish can wait');
+  for (const task of [lead, security]) await review(task, []);
+  await assert.rejects(dispatch(store, 'website-delivery'), /Waiting for accepted handoff/);
+  await assert.rejects(requestFix(store, randomUUID(), 'Stale click'), /build candidate changed/);
+  const loop = await requestFix(store, first.id, 'Fix the filter');
+  assert.equal(loop.number, 1);
+  let summary = summarize(await store.read());
+  assert.equal(summary.fix.used, 1);
+  assert.equal(summary.backlog[0].title, backlog.title);
+  assert.equal(currentAttempt(summary.tasks.find(task => task.packet.id === ux)), undefined);
+  assert.equal(summary.tasks.find(task => task.packet.id === visual).attempts[0].decision.disposition, 'accepted');
+  assert.equal(currentAttempt(summary.tasks[2]).decision.disposition, 'accepted');
+
+  const repeated = await dispatch(store, buildId, undefined, undefined, async job => {
+    assert.equal(job.task.fixLoop.previousCandidate, first.candidate.commit);
+    assert.ok(loop.artifacts.every(record => job.inputs.some(input => input.id === record.id && input.digest === record.digest)));
+    return completed('website', source);
+  }, control);
+  assert.match(repeated.error, /must change the reviewed candidate source/);
+  const second = await seedBuild('<main>Replacement candidate</main>');
+  assert.notEqual(second.candidate.commit, first.candidate.commit);
+  const secondUx = await review(ux, []);
+  const secondVisual = await review(visual, []);
+  assert.equal(secondUx.prerequisites.find(source => source.taskId === buildId).attemptId, second.id);
+  await decide(store, ux, secondUx.id, 'accepted', 'Checked replacement');
+  await assert.rejects(dispatch(store, 'website-delivery'), /Visual implementation review/);
+  await decide(store, visual, secondVisual.id, 'accepted', 'Checked replacement');
+  for (const task of [lead, security]) {
+    const attempt = await review(task, []);
+    await decide(store, task, attempt.id, 'accepted', 'Checked replacement');
+  }
+  const delivery = await dispatch(store, 'website-delivery', undefined, undefined, async () => completed('delivery', 'Ready for review'));
+  assert.equal(delivery.outcome, 'completed');
+  await assert.rejects(requestFix(store, second.id, 'Try again'), /limit reached/);
+  summary = summarize(await store.read());
+  assert.equal(summary.backlog[0].title, backlog.title);
 });
