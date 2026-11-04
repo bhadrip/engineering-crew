@@ -78,8 +78,8 @@ and `gpt-6.1-sol`, with two fresh samples per case and profile.
 
 | Fixed cases | Revision 2 | Final revision 3 |
 | --- | ---: | ---: |
-| Regression (6 cases × 2) | 7/12 | 12/12 |
-| Transfer (2 cases × 2) | 1/4 | 4/4 |
+| Regression (6 cases × 2) | 6/12 | 12/12 |
+| Transfer (2 cases × 2) | 2/4 | 4/4 |
 | Total | 8/16 | 16/16 |
 
 Manual inspection confirmed that the final revision held the privacy and
