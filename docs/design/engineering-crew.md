@@ -327,26 +327,18 @@ logs after the container is removed. Build and QA keep separate receipts. Label
 host and Docker runs explicitly and validate the required environment. The
 runner should record observed results even when the command fails.
 
-**Langfuse drills into selected activity.** Capture is off by default. For the
-pilot, manually register and export specific completed agent turns from the
-project's authorized run to a configured loopback Langfuse project. Correlate
-project/repository, epic, run, task, role, revision, and native thread/turn IDs.
-A verified receipt points directly to the observed trace or span and records
-which expected observations were found. A separately labeled delivery summary
-may provide navigation alongside verified native observations. Docker
-results and QA verdicts stay available when Langfuse is off or unavailable.
-If an expected trace cannot be verified, record the reason and show the gap.
+**Langfuse drills into selected activity.** Capture is off by default. Publish
+one completed Codex receipt explicitly to a configured loopback project. The
+span correlates the project, epic, run, task, role, Git revision, attempt, and
+native thread. The UI links to the observation after verifying the IDs and
+receipt digest in Langfuse. Docker results and QA verdicts remain available
+independently of telemetry.
 
-Keep Langfuse keys in a private file outside the checkout, never in the run
-bundle or Docker environment. Validate the checkout, expected project, target
-origin, and registered turn inventory. Sanitize a temporary copy before export.
-Exclude private reasoning, injected instructions, credentials, private input,
-and sensitive tool payloads. Use fictional pilot inputs and review the export
-scope before sending: filters cannot guarantee that free text is safe. Pass a
-minimal environment to the exporter, reject redirects, and discard the
-temporary copy. Retention and trace access are project settings. Automatic
-capture is a later extension that requires a trusted project hook and
-an explicit run and thread allowlist, with the vendor's direct export disabled.
+Keep Langfuse keys in a private file outside the checkout. The publisher
+validates the target and verifies that the key belongs to the configured
+project. The payload uses allowlisted receipt fields and no transcript data.
+An automatic capture flow would require separate configuration and a trusted
+selection policy. [Local Langfuse setup](../langfuse.md)
 
 ## Hello World pet store walkthrough
 
@@ -471,15 +463,11 @@ hard-coded roster, prompt parsing, and special treatment of assignments that
 hides dependency edges. Use the illustrative hints fixture as a design
 reference and build the acceptance walkthrough from the real Hello World run.
 
-The staged `project-crew-telemetry-stage` extraction is the better starting
-point for the optional Langfuse adapter. Carry forward the sanitizer, target
-and credential validation, explicit turn selection, receipt and verification
-logic, and offline tests. Adapt its required PR identity to a local run with an
-optional PR, and preserve a clear distinction between summary and native
-observations. Start with manual capture and verify the adapted path against the
-local exporter and Langfuse before claiming live compatibility. For this design
-review, the existing Hello World tests passed 4/4 and the staged telemetry
-suite passed 18/18 offline. No live capture or new end-to-end run was performed.
+The staged `project-crew-telemetry-stage` extraction informed the Langfuse
+target validation, private credentials, explicit selection, and API read-back.
+The first adapter publishes allowlisted runtime receipt metadata over OTLP
+from the CLI. A future native transcript exporter would need its own review
+and integration tests.
 
 For discussion, confirm the four contract shapes, the first Codex execution
 slice, and whether the catalog command gives Product and QA enough to review.

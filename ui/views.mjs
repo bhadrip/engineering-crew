@@ -1,3 +1,5 @@
+import { verifiedTraceLink } from '../lib/langfuse.mjs';
+
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function layout(title, body, running = false) {
@@ -325,6 +327,19 @@ function handoffArtifacts(task) {
   };
 }
 
+function traceLink(attempt) {
+  const url = verifiedTraceLink(attempt?.trace);
+  return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">Open Langfuse trace<span aria-hidden="true">↗</span></a>` : '';
+}
+
+function evidenceLinks(run, taskId, ids, attempt, view) {
+  const trace = traceLink(attempt);
+  const records = links(run, taskId, ids, view);
+  if (trace) return `${records}<ul class="links trace-link"><li>${trace}</li></ul>`;
+  if (attempt?.trace?.status === 'unverified') return `${records}<p class="muted trace-state">${escape(attempt.trace.error)}</p>`;
+  return records;
+}
+
 function pipelineDetails(run, task, taskById) {
   const { packet, attempts } = task;
   const latest = attempts.at(-1);
@@ -339,7 +354,7 @@ ${packet.prerequisites.length ? `<p class="pipeline-deps"><strong>Depends on</st
     `<a href="${pipelineHref(run, id)}">${escape(taskById.get(id).packet.title)}</a>`).join(' · ')}</p>` : ''}
 <div class="pipeline-artifacts"><section><h4>Inputs</h4>${links(run, packet.id, inputs, 'pipeline')}</section>
 <section><h4>Outputs</h4>${outputs.length ? links(run, packet.id, outputs, 'pipeline') : `<p class="muted">Expected ${escape(packet.outputs.map(slot => slot.title ?? slot.id).join(', '))}.</p>`}</section>
-<section><h4>Evidence</h4>${evidence.length ? links(run, packet.id, evidence, 'pipeline') : '<p class="muted">No execution receipt recorded.</p>'}</section></div>
+<section><h4>Evidence</h4>${evidenceLinks(run, packet.id, evidence, latest, 'pipeline')}</section></div>
 <p class="pipeline-detail-links"><a href="${taskHref(run.id, packet.id)}">Open full handoff${attempts.length > 1 ? ` · ${attempts.length} attempts` : ''} ${arrow}</a></p></section>`;
 }
 
@@ -415,12 +430,13 @@ ${projectHeader(run.project)}
 <div><dt>Run</dt><dd><code>${escape(run.id)}</code></dd></div></dl></aside>
 <div class="records"><div class="grid"><section><h2>Inputs</h2>${links(run, packet.id, inputs)}</section>
 <section><h2>Outputs</h2>${outputs.length ? links(run, packet.id, outputs) : `<p class="muted">Expected output: ${escape(expected)}.</p>`}</section></div>
-<section><h2>Evidence</h2>${evidence.length ? links(run, packet.id, evidence) : '<p class="muted">A receipt will appear after execution.</p>'}
+<section><h2>Evidence</h2>${evidenceLinks(run, packet.id, evidence, latest)}
 ${latest?.usage ? `<p class="muted">${latest.usage.total.toLocaleString('en-US')} tokens reported · target ${packet.budget.targetTotalTokens.toLocaleString('en-US')}${latest.overTokenTarget ? ' · above target' : ''}</p>` : ''}
 ${latest?.result ? `<p>${escape(latest.result.summary)}</p>${[['Questions', latest.result.questions], ['Agent decisions', latest.result.decisions], ['Blockers', latest.result.blockers]].filter(([, values]) => values.length).map(([label, values]) => `<h3>${label}</h3><ul>${values.map(value => `<li>${escape(value)}</li>`).join('')}</ul>`).join('')}` : ''}</section>
 ${attempts.length ? `<section><h2>Attempt history</h2><ol class="history">${attempts.map(attempt => `<li id="attempt-${attempt.number}">
 <strong>Attempt ${attempt.number}</strong> · ${escape(status(attempt)[0])}${attempt.packetId ? ` · <a href="${artifactHref(run.id, attempt.packetId, packet.id)}">Packet revision ${attempt.packetRevision}</a>` : ''}${attempt.receiptId ? ` · <a href="${artifactHref(run.id, attempt.receiptId, packet.id)}">Receipt</a>` : ''}
 ${Object.values(attempt.result?.artifacts ?? {}).map(id => ` · <a href="${artifactHref(run.id, id, packet.id)}">Output</a>`).join('')}
+${traceLink(attempt) ? ` · ${traceLink(attempt)}` : ''}
 ${attempt.decision ? `<p class="muted">${escape(attempt.decision.owner)} recorded ${escape(attempt.decision.disposition)}. ${escape(attempt.decision.note)}</p>` : ''}</li>`).join('')}</ol></section>` : ''}
 </div></div></main>`, latest?.outcome === 'running');
 }

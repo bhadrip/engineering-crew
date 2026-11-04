@@ -42,6 +42,9 @@ and reported usage when available. The build runner creates an isolated Git
 candidate ref. Separate Docker receipts record the author tests and independent
 QA outcomes on that same commit.
 
+Publish selected Codex receipts from the CLI to enable an optional trace link
+in the handoff view. [Langfuse setup](docs/langfuse.md)
+
 Codex profiles receive only the inputs in their task packets. Configure roles,
 dependencies, allowed build outputs, and verification in the project JSON.
 The preview runs locally. If the checkout has runs for multiple projects,
