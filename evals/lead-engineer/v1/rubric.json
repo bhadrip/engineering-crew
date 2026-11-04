@@ -1,0 +1,56 @@
+{
+  "cli-argument-precedence": {
+    "state": "completed",
+    "checks": {
+      "one-token dispatch and mixed invocation": ["--list-pets", "sole|single|exactly one|length\\s*={2,3}\\s*1", "extra|multiple|two or more", "usage"],
+      "process contract and separate verification": ["stdout", "stderr", "newline", "exit|status", "independent|black.box", "author", "hello\\.mjs", "hello\\.test\\.mjs"]
+    }
+  },
+  "piped-export": {
+    "state": "completed",
+    "checks": {
+      "mechanism and safe alternative": ["process\\.exit", "truncat|discard|lost|loss|flush|drain", "exitCode|natural(?:ly)? (?:exit|terminat)|allow .*exit|let .*exit|remove .*exit|avoid .*exit"],
+      "boundary test": ["pip(e|ed|ing)|slow reader|backpressure", "4\\s*(?:mi?b|mebi)|large|multi.mega", "newline|trailing LF|final LF", "stdout", "stderr"]
+    }
+  },
+  "retry-after-commit": {
+    "state": "completed",
+    "checks": {
+      "causal failure and identity": ["commit", "response", "duplicat|second job|another job", "operation ID|request ID|idempotency (?:key|token)", "atomic|same transaction|transactional"],
+      "test the replay and preserve separate intent": ["restart|relaunch", "same job|original job|one job|job count", "identical|same payload", "separate|distinct|different", "independent|black.box"]
+    }
+  },
+  "approve-with-optional-note": {
+    "state": "completed",
+    "checks": {
+      "approve the exact plan": ["cli-r7", "approv|agreed|agree|accept", "independent|black.box"]
+    }
+  },
+  "same-test-twice": {
+    "state": "blocked",
+    "checks": {
+      "trace the false independence and require a different oracle": ["test-r4", "hello\\.test\\.mjs|author.test", "independent|black.box", "own (?:cases|checks|expected)|separate (?:cases|checks|expected)|derive|oracle|criterion|criteria", "stdout", "stderr", "exit|status"]
+    }
+  },
+  "rollback-schema": {
+    "state": "blocked",
+    "checks": {
+      "old binary fails on new schema": ["schema-r9", "item_label", "old|previous", "rollback|roll back", "mixed|coexist|both versions|rolling"],
+      "retain compatibility and prove rollback": ["expand|additive|keep|retain|preserve", "contract|cleanup|drop|rename", "test|verif|exercise|rehears"]
+    }
+  },
+  "read-only-retry": {
+    "state": "completed",
+    "checks": {
+      "bounded retry on safe operation": ["read.only|side.effect.free|no side effects|GET", "250\\s*ms", "one retry|retry once|at most (?:one retry|two attempts)|two attempts|single retry|one additional attempt", "404", "deadline|remaining budget"],
+      "deterministic independent test": ["fake clock|controlled clock|virtual time|deterministic|stub|fake transport|controlled transport", "independent|black.box", "timeout"]
+    }
+  },
+  "unmeasurable-latency": {
+    "state": "blocked",
+    "checks": {
+      "bind evidence to required load": ["perf-r3", "p99", "150\\s*ms", "40", "concurr", "representative|200k|200,?000", "smoke"],
+      "name an authorized way forward": ["staging", "product owner", "approv|scope|requirement"]
+    }
+  }
+}

@@ -43,5 +43,27 @@
     "reports": [
       "evals/sdm/accepted.json"
     ]
+  },
+  "lead-engineer": {
+    "project": "examples/hello-world/crew.project.json",
+    "profile": "lead-engineer",
+    "suite": "evals/lead-engineer/v1",
+    "coverage": {
+      "examples/hello-world/crew/skills/design-crew-change/SKILL.md": [
+        "cli-argument-precedence",
+        "piped-export",
+        "retry-after-commit",
+        "read-only-retry"
+      ],
+      "examples/hello-world/crew/skills/review-crew-build-plan/SKILL.md": [
+        "approve-with-optional-note",
+        "same-test-twice",
+        "rollback-schema",
+        "unmeasurable-latency"
+      ]
+    },
+    "reports": [
+      "evals/lead-engineer/accepted.json"
+    ]
   }
 }

@@ -3,8 +3,9 @@
 A profile owns a work product and a bounded decision. A skill teaches the
 judgment or procedure that improves that work. The eval measures observable
 behavior on the same work product before and after a change. The [Security
-Engineer pilot](security-engineer-pilot.md) and [SDM pilot](sdm-pilot.md)
-show how this works for reviews and delivery decisions.
+Engineer pilot](security-engineer-pilot.md), [SDM pilot](sdm-pilot.md), and
+[Lead Engineer pilot](lead-engineer-pilot.md) show how this works for reviews,
+delivery decisions, and technical plan approval.
 
 1. **Define the job.** Name the decision the role owns, the packet it gets,
    the output the next role needs, and the boundary of its authority. For

@@ -86,7 +86,13 @@ test('the plan joins only accepted reviews and pins both upstream artifacts', as
   const complete = (slot, content) => ({ outcome: 'completed', receipt,
     response: { state: 'completed', summary: content, decisions: [], questions: [], blockers: [], outputs: [{ slot, content }] } });
   const product = await dispatch(store, 'product-review', undefined, undefined, async () => complete('criteria', 'CAT-1 to CAT-3'));
-  const lead = await dispatch(store, 'lead-review', undefined, undefined, async () => complete('technical-review', 'Two files'));
+  const lead = await dispatch(store, 'lead-review', undefined, undefined, async job => {
+    const profile = snapshot.project.profiles.find(profile => profile.id === 'lead-engineer');
+    assert.equal(job.attempt.profileRevision, profile.revision);
+    assert.equal(profile.skills.length, 2);
+    assert.deepEqual(job.instructions, [profile.instructions, ...profile.skills].map(path => snapshot.files.get(path)));
+    return complete('technical-review', 'Two files');
+  });
   await decide(store, 'product-review', product.id, 'accepted', 'Criteria reviewed');
   await assert.rejects(dispatch(store, 'implementation-plan'), /Waiting for accepted handoff: Lead Engineer review/);
   await decide(store, 'lead-review', lead.id, 'accepted', 'Scope reviewed');

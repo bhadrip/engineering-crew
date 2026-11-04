@@ -46,11 +46,14 @@
     },
     {
       "id": "lead-engineer",
-      "revision": 1,
+      "revision": 2,
       "name": "Lead Engineer",
       "remit": "Own the technical approach, test strategy, and build readiness.",
       "instructions": "examples/hello-world/crew/lead-engineer.md",
-      "skills": [],
+      "skills": [
+        "examples/hello-world/crew/skills/design-crew-change/SKILL.md",
+        "examples/hello-world/crew/skills/review-crew-build-plan/SKILL.md"
+      ],
       "tools": []
     },
     {

@@ -1,0 +1,1195 @@
+{
+  "profile": "lead-engineer",
+  "suite": "evals/lead-engineer/v1",
+  "suiteDigest": "58a7142f2c7e6c262195a841ee2ab2ba2144df251d3130e65e1e31dac085e318",
+  "runtime": {
+    "model": "gpt-6.1-sol",
+    "cli": "codex-cli 0.163.0",
+    "digest": "c636ae400d27ec23f92ce13b8b11135abcda783bc29fcbf033a1e119a0c4d102"
+  },
+  "samples": 2,
+  "variants": {
+    "baseline": {
+      "revision": 1,
+      "digest": "deb214a25af6121da03ce9e8809b62d9ef94b473c604241305407e0636a35f97",
+      "sourceCommit": "51de8978d8ddd0c82ce350ecd6dbbb1c60799eaf"
+    },
+    "candidate": {
+      "revision": 2,
+      "digest": "f7d6beb9667c2ee6f6d81cca272a001e37ce2cbe114061778b016a2ecfe1a7c0"
+    }
+  },
+  "rows": [
+    {
+      "case": "cli-argument-precedence",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed the smallest catalog change and separate author and independent QA checks. No checks were executed.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nThe change is ready to plan with one catalog-content question below. Preserve the existing argument-count guard and add one reserved-argument branch before the greeting. Reject the stakeholder’s proposed first-token check before argument count: it would incorrectly accept `--list-pets extra`, violating CAT-3.\n\n## Smallest design and precedence\n\nRetain `const [name, ...extra] = process.argv.slice(2)` and use this branch order:\n\n1. If `extra.length` is nonzero, preserve the existing usage-error branch unchanged.\n2. Otherwise, if `name === '--list-pets'`, print `JSON.stringify(catalog)` with `console.log`.\n3. Otherwise, preserve the existing greeting expression unchanged.\n\nUse a small, fixed fictional catalog defined in `hello.mjs`. No dependencies, argument parser, external data file, or broader refactoring is needed. The brief does not specify catalog entries or an object schema; agree on those before treating an exact catalog fixture as authoritative.\n\n| Arguments passed to the process | Required behavior |\n| --- | --- |\n| None | stdout `Hello, World!\\n`, empty stderr, status 0 |\n| Exactly `--list-pets` | stdout containing the agreed JSON array followed by exactly one newline, empty stderr, status 0 |\n| Any other single argument | stdout `Hello, <argument>!\\n`, empty stderr, status 0 |\n| Any two or more arguments | Empty stdout, stderr `Usage: node hello.mjs [name]\\n`, status 1 |\n\nSingle arguments include a name containing spaces, strings such as `--help` and `--list-pets=1`, and an explicitly supplied empty string. Match the reserved flag exactly; do not trim, split, normalize, or interpret other flag-like strings. A quoted name containing spaces reaches Node as one argument. Set `process.exitCode = 1` for usage errors as today; no explicit success exit or forced `process.exit()` is necessary.\n\n## Allowed files\n\nOnly `examples/hello-world/hello.mjs` and `examples/hello-world/hello.test.mjs` may change. Leave the brief, package metadata, dependencies, and all other files untouched.\n\n## Author checks\n\nExtend the existing subprocess tests in `hello.test.mjs`. Invoke the CLI with `spawnSync(process.execPath, [scriptPath, ...args], { encoding: 'utf8' })` so argument boundaries are explicit and shell parsing cannot conceal regressions. Resolve `scriptPath` relative to the test file. For every case, assert no spawn error, no termination signal, numeric exit status, and exact stdout and stderr.\n\nCover:\n\n- CAT-1: sole `--list-pets`; compare the complete output against the agreed catalog serialization plus `\\n`, and independently parse stdout to verify an array.\n- CAT-2: no args; an ordinary name; one name containing spaces; another `--` string; `--list-pets=1`; and an empty-string argument. Assert exact greetings.\n- CAT-3: retain the existing two-argument case and add `['--list-pets', 'extra']`, `['name', '--list-pets']`, and a three-argument case. Assert the exact existing usage text, empty stdout, and status 1.\n\nThe reserved-first multi-argument case is essential: it directly detects the stakeholder’s incorrect precedence proposal. Expected catalog data must be an agreed literal fixture, not imported from production code.\n\n## Independent black-box QA\n\nQA should execute the submitted CLI directly in fresh processes using an independent harness, without importing application internals or relying solely on author-test results. Check raw stdout, stderr, and process status against the table above. For catalog output, verify the agreed contents, valid JSON array, and exactly one final newline. Include a quoted multiword name in a shell invocation to validate the documented user interaction.\n\nIndependently exercise sole reserved flag, no args, ordinary and flag-like names, empty-string input, and multiple arguments with the reserved flag in both first and later positions. Review the final diff to confirm that only the two allowed files changed and no dependencies were introduced.\n\n## Risks and evidence gates\n\nThe primary risk is dispatching the reserved flag before rejecting surplus arguments. Other risks are matching flag prefixes, breaking whitespace or empty-string names, adding output to stderr, changing the usage newline, and checking parsed JSON without checking exact output bytes.\n\nBefore build acceptance, require the agreed catalog contents/schema, a scope-compliant diff, passing author subprocess checks, and independently recorded black-box results. These are proposed checks; none were executed for this review."
+          }
+        ],
+        "decisions": [
+          "Argument count takes precedence over reserved-flag dispatch.",
+          "Use a fixed in-file catalog and exact reserved-flag matching.",
+          "Restrict implementation changes to hello.mjs and hello.test.mjs.",
+          "Keep author subprocess tests and independent black-box QA as separate evidence gates."
+        ],
+        "questions": [
+          "What fictional catalog entries and JSON schema should define the expected catalog? The brief specifies only a JSON array; this does not block the technical design but must be settled before exact-output acceptance."
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12540,
+        "output": 1259,
+        "total": 13799,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 82
+      },
+      "elapsedMs": 30724,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "cli-argument-precedence",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Recommend argument-count validation before sole-argument catalog dispatch, preserving existing greetings and usage errors. Technical review is ready for handoff; the catalog contents require Product clarification.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nDisposition: recommendation ready for handoff. This review does not authorize implementation or release. No checks were executed; conclusions come from the pinned source and test excerpts.\n\n## Contract and controlling branch\n\nThe committed CLI destructures `process.argv.slice(2)` into `name` and `extra`. It checks `extra.length` first: two or more arguments produce empty stdout, `Usage: node hello.mjs [name]\\n` on stderr, and exit status 1 through `process.exitCode`. Otherwise it prints the default or named greeting.\n\nPreserve that precedence and add the catalog branch between the usage branch and the greeting branch:\n\n1. Two or more arguments: retain the existing usage error, regardless of argument values.\n2. Exactly one argument equal to `--list-pets`: emit the fictional catalog as a JSON array, followed by exactly one newline; empty stderr; exit 0.\n3. Otherwise: retain the current greeting. No arguments yield `Hello, World!\\n`; any other single string yields `Hello, <name>!\\n`.\n\nCompare the reserved flag by exact string equality. Do not trim names, split a supplied argument on whitespace, parse other flags, or treat prefixes as the reserved flag. An explicitly supplied empty string continues to yield `Hello, !\\n`.\n\n## Smallest implementation and scope\n\nOnly `examples/hello-world/hello.mjs` and `examples/hello-world/hello.test.mjs` may change. Add no dependencies or files. Keep catalog data directly in `hello.mjs` and serialize it with `JSON.stringify`, using the existing newline-producing output style. No argument parser, new abstraction, or persistence is needed.\n\nThe supplied brief does not specify catalog entries, ordering, or item schema. Product must supply that expected value, or explicitly delegate its selection, before implementers and QA can agree on a content oracle. Do not present invented entries as accepted requirements. This clarification does not prevent completing the technical recommendation.\n\n## Tradeoff and failure paths\n\nReject the stakeholder proposal to dispatch on the first token before validating count. It makes catalog recognition early but violates CAT-3: `--list-pets extra` must produce a usage error, not catalog output. Keeping the existing count-first branch is both smaller and compatible.\n\nReject immediate `process.exit()` after output. Node stdout or stderr writes can remain pending, particularly when piped; immediate exit can truncate output. Retain `process.exitCode = 1` for usage failures and allow natural exit so pending writes drain. Catalog success needs no explicit exit call. The brief does not define a new broken-pipe or write-error contract, so do not add one here.\n\n## Author verification to implement\n\nExtend the existing test file using Node's existing test facilities and subprocess capture. Assert stdout, stderr, and status separately for every case:\n\n| Input argument array | Expected stdout | Expected stderr | Status |\n| --- | --- | --- | --- |\n| `[]` | `Hello, World!\\n` | empty | 0 |\n| `['Ada']` | `Hello, Ada!\\n` | empty | 0 |\n| `['Ada Lovelace']` | `Hello, Ada Lovelace!\\n` | empty | 0 |\n| `['--other']` | `Hello, --other!\\n` | empty | 0 |\n| `['--list-pets-extra']` | `Hello, --list-pets-extra!\\n` | empty | 0 |\n| `['']` | `Hello, !\\n` | empty | 0 |\n| `['--list-pets']` | approved catalog JSON plus one final newline | empty | 0 |\n| `['Ada', 'Lovelace']` | empty | `Usage: node hello.mjs [name]\\n` | 1 |\n| `['--list-pets', 'extra']` | empty | same exact usage | 1 |\n| `['Ada', '--list-pets']` | empty | same exact usage | 1 |\n| `['--list-pets', '--list-pets', 'extra']` | empty | same exact usage | 1 |\n\nPass argument arrays directly to the child process so the spaced-name case represents one argument. For the catalog, verify that the entire document parses as an array, equals the independently supplied approved contents and order, and has exactly the required final newline without additional output. Check child-process launch errors separately from CLI exit failures.\n\n## Independent QA and evidence\n\nQA must exercise the exact candidate CLI at its subprocess boundary using expectations derived from CAT-1 through CAT-3 and the Product-approved catalog, without importing catalog data or expected outputs from implementation code. Merely rerunning the author's tests is insufficient.\n\nQA should independently cover the reserved sole argument, default greeting, one spaced name, another `--` string, and both orders of a two-argument call containing the reserved flag. `['--list-pets', 'extra']` is the decisive negative case: it fails under the proposed first-token-first implementation.\n\nUse piped stdout and stderr, collect both through child close, and compare complete bytes and exit status. Include a slowly consumed pipe check for complete catalog and usage output. A small catalog may not reliably expose premature exit in execution, so also inspect the candidate to confirm no immediate `process.exit()` was introduced. Required evidence is the candidate identity, Node version, invocation arguments, captured streams, statuses, and comparison results. No load or timing target is specified.\n\n## Handoff gates\n\nImplementers must honor the two-file scope, dependency prohibition, count-first precedence, exact stream/status contract, and natural exit behavior. Obtain the catalog content decision from Product before finalizing content assertions. Author checks and independent QA remain future execution work."
+          }
+        ],
+        "decisions": [
+          "Validate argument count before recognizing the reserved flag.",
+          "Use an inline catalog and existing output mechanisms without dependencies.",
+          "Preserve natural exit and process.exitCode for usage failures.",
+          "Require independent contract-derived subprocess checks on the exact candidate."
+        ],
+        "questions": [
+          "Product: What catalog entries, item schema, and ordering are approved, or is their selection delegated to the implementer?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14702,
+        "output": 1445,
+        "total": 16147,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 25
+      },
+      "elapsedMs": 34459,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "cli-argument-precedence",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed a minimal CLI change and separate author and independent QA checks. Catalog contents remain unspecified.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nThe smallest design keeps the existing argument destructuring and checks `extra.length` first. Only after rejecting multiple arguments should it recognize `name === '--list-pets'`. All remaining calls retain the existing greeting branch.\n\nReject the stakeholder proposal to check the first token before argument count: `--list-pets extra` must produce the CAT-3 usage error, not a catalog. The reserved flag applies only when it is the sole argument.\n\n## Required process behavior\n\n| Arguments passed to the script | stdout | stderr | Exit |\n| --- | --- | --- | --- |\n| None | `Hello, World!\\n` | Empty | 0 |\n| Sole `--list-pets` | Serialized fictional catalog JSON array followed by exactly one newline | Empty | 0 |\n| Any other single name | `Hello, <name>!\\n` | Empty | 0 |\n| Two or more arguments, including calls beginning with `--list-pets` | Empty | `Usage: node hello.mjs [name]\\n` | 1 |\n\nKeep a fixed catalog array in `hello.mjs` and emit it with `console.log(JSON.stringify(catalog))`. Preserve the existing usage text, `console.error`, and `process.exitCode = 1`. Do not add flag parsing, name splitting, dependencies, or explicit process termination. A quoted name containing spaces arrives as one argument and must remain intact. Other strings beginning with `--` remain names; an explicitly supplied empty string produces `Hello, !\\n`.\n\n## Allowed files\n\nOnly `examples/hello-world/hello.mjs` and `examples/hello-world/hello.test.mjs` may change. No package, lockfile, documentation, fixture, or dependency changes are needed.\n\n## Author checks\n\nExtend `hello.test.mjs` with subprocess assertions using the Node executable and an argument array, without shell interpretation. Assert exact stdout, exact stderr, exit status, and absence of a spawn error or signal termination for:\n\n- No arguments and a normal single name.\n- Sole `--list-pets`, checking the exact agreed catalog serialization plus one final newline and separately confirming the parsed value is the expected array.\n- A single name containing spaces, another `--`-prefixed string, and an empty string.\n- Two ordinary arguments, `--list-pets extra`, `name --list-pets`, and a call with three arguments.\n\nThese checks extend the limited committed test excerpt; its existing two cases alone do not establish CAT-1 or full CAT-2 coverage.\n\n## Independent black-box QA\n\nQA should invoke the CLI independently of the author test suite and capture stdout, stderr, exit status, and signal termination. Use the approved catalog expectation rather than importing implementation data. Verify CAT-1's complete output bytes and JSON array value; CAT-2's default greeting, spaced name, empty name, and nonreserved flag-like name; and CAT-3 with the reserved flag both first and later in multi-argument calls. Include a literal single argument such as `--list-pets extra` to distinguish a name containing spaces from two arguments.\n\nInspect the final diff for the two-file boundary and absence of dependencies. Build readiness requires the catalog decision below, passing author checks, and independent QA evidence. No checks have been executed in this review.\n\n## Risks and open question\n\nThe main regression risk is incorrect branch precedence, which would allow a reserved first token to bypass the usage error. Broad flag matching or splitting names would also violate CAT-2. Exact stream and newline assertions are needed because parsing JSON alone cannot verify CAT-1's output contract.\n\nThe pinned brief does not specify catalog entries, ordering, or field schema. The owner must define or explicitly delegate those choices before an exact catalog expectation can be finalized. This is the remaining readiness blocker; the control-flow design is otherwise determined."
+          }
+        ],
+        "decisions": [
+          "Reject first-token catalog handling before argument-count validation.",
+          "Keep the implementation dependency-free and confined to hello.mjs and hello.test.mjs.",
+          "Require distinct author-test and independent black-box QA evidence."
+        ],
+        "questions": [
+          "What catalog entries, field schema, and ordering are approved, or may the implementer choose them?"
+        ],
+        "blockers": [
+          "The catalog payload is unspecified, preventing a final exact-output expectation and unconditional build readiness."
+        ]
+      },
+      "usage": {
+        "input": 13795,
+        "output": 957,
+        "total": 14752,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 0
+      },
+      "elapsedMs": 23107,
+      "pass": false,
+      "issues": [
+        "Completed response still claims blockers"
+      ]
+    },
+    {
+      "case": "cli-argument-precedence",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Recommended an argument-count-first CLI change, with separate author and independent QA checks. Catalog contents remain unspecified.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nDisposition: technical review complete. The approach below satisfies CAT-1–CAT-3 within the permitted scope. This recommendation does not authorize implementation or release. Exact catalog entries and schema are not supplied; settle that expected payload before implementation so author tests and QA have a shared contract.\n\n## Committed behavior and controlling branch\n\nThe source destructures `process.argv.slice(2)` into `name` and `extra`. Any nonempty `extra` takes the usage branch, writes `Usage: node hello.mjs [name]` plus a newline to stderr, and sets exit status 1. Otherwise it prints the default greeting or a greeting containing the single argument verbatim.\n\nThe supplied test excerpt reports coverage of no arguments and one two-token call using `spawnSync` to inspect stdout and stderr. It does not establish reserved-flag behavior, exit-status assertions, or pipe completeness. No checks were executed for this review.\n\n## Smallest implementation\n\nChange only `examples/hello-world/hello.mjs` and `examples/hello-world/hello.test.mjs`. Add no dependencies, data files, or helper modules.\n\nPreserve the existing argument-count check as the first decision. Inside its existing single-or-zero-argument branch, add an exact comparison against `--list-pets`:\n\n1. Two or more arguments: retain the existing usage error, regardless of argument contents.\n2. Exactly one argument equal to `--list-pets`: serialize a fixed inline fictional catalog array with `JSON.stringify` and write it to stdout with exactly one final newline. Leave stderr empty and exit naturally with status 0.\n3. No arguments or any other single argument: retain the existing greeting expression unchanged.\n\nKeep the catalog deterministic and inline. Once its contents are agreed, the implementation and acceptance oracle must use those exact values. Do not add filesystem access, network access, option parsing, retries, or special handling for other strings beginning with `--`.\n\nUse `console.log(JSON.stringify(catalog))` or an equivalent single newline-terminated write. Preserve natural termination and `process.exitCode = 1` for usage failures. Immediate `process.exit()` can terminate Node before pending stdout or stderr writes finish, particularly when the destination is a pipe, truncating otherwise correct output.\n\n## Tradeoff and rejected alternatives\n\nReject the stakeholder proposal to dispatch on the first token before validating argument count. It makes flag handling convenient but causes `--list-pets extra` to produce a catalog instead of the CAT-3 usage failure. Argument count must take precedence.\n\nReject a general option parser: it adds unnecessary machinery and risks interpreting other `--` strings as options instead of names, violating CAT-2. Reject an external catalog file because the allowed paths exclude it. Reject immediate process termination because it risks incomplete output without providing a required benefit.\n\n## Author verification\n\nAdd focused child-process tests in `hello.test.mjs`. Pass argument arrays directly to Node so a name containing spaces remains one argument. For every case assert stdout, stderr, and exit status separately; also check that the child did not fail to spawn or terminate by signal.\n\n| Input arguments | Exact expected public result |\n| --- | --- |\n| `[]` | stdout `Hello, World!\\n`; empty stderr; status 0 |\n| `[\"Ada\"]` | stdout `Hello, Ada!\\n`; empty stderr; status 0 |\n| `[\"Ada Lovelace\"]` | stdout `Hello, Ada Lovelace!\\n`; empty stderr; status 0 |\n| `[\"--other\"]` | stdout `Hello, --other!\\n`; empty stderr; status 0 |\n| `[\"--list-pets-extra\"]` | stdout `Hello, --list-pets-extra!\\n`; empty stderr; status 0 |\n| `[\"\"]` | stdout `Hello, !\\n`; empty stderr; status 0 |\n| `[\"--list-pets\"]` | stdout is the agreed serialized JSON array plus exactly one newline; empty stderr; status 0 |\n| `[\"Ada\", \"Lovelace\"]` | empty stdout; stderr `Usage: node hello.mjs [name]\\n`; status 1 |\n| `[\"--list-pets\", \"extra\"]` | the same exact usage failure |\n| `[\"Ada\", \"--list-pets\"]` | the same exact usage failure |\n| `[\"--list-pets\", \"--list-pets\", \"extra\"]` | the same exact usage failure |\n\nFor the catalog, assert exact output bytes and parse the JSON to compare with a literal expected array. Parsing alone misses unwanted whitespace or newline changes; checking only the array type misses incorrect catalog contents. Do not import production catalog data to construct the expected value.\n\n## Independent QA strategy\n\nQA should derive its own expectations from CAT-1–CAT-3 and the agreed catalog payload, and exercise the exact candidate CLI as a subprocess. Rerunning the author's tests alone is insufficient. QA can invoke an external harness without adding repository files outside the permitted paths.\n\n| Risk | Independent check and oracle | Required evidence/environment |\n| --- | --- | --- |\n| Flag dispatch bypasses arity validation | Run `--list-pets extra`; require empty stdout, exact usage stderr, and status 1 | Node subprocess with separate stream capture on the exact candidate |\n| Generic option handling breaks names | Run `--other`, `--list-pets-extra`, and one space-containing argument; require exact greetings | Argument-array invocation preserving argument boundaries |\n| Catalog payload or framing is wrong | Compare complete stdout bytes with the independently specified catalog JSON plus one newline; verify empty stderr and status 0 | Agreed catalog entries/schema and independent literal oracle |\n| Immediate exit loses pending output | Run catalog and usage cases with piped stdout/stderr consumed slowly; require complete expected bytes and correct status | Asynchronous subprocess harness, bounded completion timeout, stream-end capture, and source inspection for forced exit |\n| Existing behavior regresses | Independently exercise default greeting and ordinary multiargument usage failure | Exact byte and exit-status assertions on the candidate |\n\nA tiny catalog may not create enough pipe pressure to expose truncation reliably. The slow-reader check provides boundary evidence, while inspecting the implementation for natural exit establishes the intended termination mechanism. Do not claim that a small-output smoke check proves arbitrary-volume output completeness.\n\n## Open decision\n\nWhat exact fictional catalog array, including schema and entries, should CAT-1 return? The accepted brief specifies its JSON shape only at the array level. This does not prevent completing the technical review, but the payload must be settled before exact-content acceptance checks can be finalized."
+          }
+        ],
+        "decisions": [
+          "Validate argument count before dispatching the reserved flag.",
+          "Keep the catalog inline and limit changes to hello.mjs and hello.test.mjs, with no dependencies.",
+          "Preserve natural exit and use process.exitCode for usage failures.",
+          "Require independent contract-derived checks on the exact candidate; no checks were executed."
+        ],
+        "questions": [
+          "What exact fictional catalog entries and schema should the --list-pets JSON array contain?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14706,
+        "output": 1705,
+        "total": 16411,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 156
+      },
+      "elapsedMs": 40056,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "piped-export",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed the minimal stdout-flush fix and independent validation gates; no checks executed.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "## Technical design\n\nThe suggested branch is unsafe for CAT-1: on Linux, writes to piped stdout are asynchronous, and `process.exit(0)` can terminate the process before a large payload drains. A successful write call does not establish that the complete snapshot reached the reader. The existing 512-byte test does not cover this failure mode.\n\nKeep the exact sole-argument dispatch, serialize the complete snapshot with `JSON.stringify(snapshot) + '\\n'`, write it once, and remove the immediate `process.exit(0)`. Let Node exit naturally after pending stdout writes finish. Keep export and legacy execution mutually exclusive so export cannot fall through into greeting or usage output. No dependency, streaming serializer, or manual drain loop is needed for the bounded 4 MiB payload. If surrounding code requires an explicit success status, use `process.exitCode = 0`, which does not force termination.\n\n## Argument precedence and compatibility\n\nExport takes precedence only when `process.argv.length === 3` and `process.argv[2] === '--export'`. Forward every other invocation unchanged to `runLegacyCli(process.argv.slice(2))`, including no arguments, greeting arguments, unknown flags, repeated `--export`, and `--export` combined with any other argument in either order. Do not scan for the flag, strip it from legacy arguments, or alter legacy exit codes, stdout, stderr, or usage text. CAT-2 and CAT-3 remain governed by the committed legacy behavior; the excerpts do not establish their exact expected messages.\n\n## Allowed files\n\nOnly `export.mjs` and `export.test.mjs` may change. Keep any large fixture generation and subprocess test helpers inside `export.test.mjs`; add no fixture files, dependencies, or unrelated refactors. The permission metadata lists `hello.mjs` paths, while the pinned brief and source identify `export.mjs`. This review uses the supplied artifacts as reference data; the implementation handoff must resolve the path mismatch without expanding the allowed change set.\n\n## Author checks\n\n- Retain the small snapshot check and assert exact stdout bytes, including exactly one appended newline, empty stderr, and exit code 0 with no terminating signal.\n- Add a Linux subprocess regression with a valid snapshot near the 4 MiB limit and a deliberately slow pipe consumer. Pause reading initially, then consume bounded chunks with delays so the payload exceeds pipe buffering. Capture bytes through EOF and await process closure. Compare the entire output against independently constructed expected bytes; JSON parsing or exit status alone is insufficient.\n- Bound subprocess execution with a timeout and clean up children on failure. Avoid synchronous capture or a promptly draining capture helper as the sole regression test, since those do not reproduce the required downstream behavior.\n- Preserve existing greeting and usage tests. Add dispatch cases for sole `--export`, extra arguments before and after it, repeated flags, and unknown flags; use committed legacy expectations for non-export cases.\n\n## Independent black-box QA\n\nQA should invoke the delivered CLI as an external process on Linux using its own harness and expected catalog data, without importing implementation helpers or relying on author test results. Exercise sole `--export` through a slow pipe with a snapshot near the size limit. Require exact full byte equality through EOF, the final newline, empty stderr, exit 0, and no signal. Confirm the exercised payload is large enough to exceed pipe capacity. Run representative greeting and usage invocations, including mixed export arguments, and compare stdout, stderr, and status against the committed baseline. Inspect the final diff to enforce the two-file restriction and absence of dependencies.\n\n## Risks and evidence gates\n\nThe primary risk is silent truncation despite exit 0. Other risks are argument dispatch broadening, legacy fallthrough, and a test harness that drains too quickly to expose premature exit. Natural termination also depends on surrounding code having no unrelated persistent handles; the excerpt cannot establish that. The complete source must be inspected for such handles and any later forced exit before build readiness is approved.\n\nOpen questions: reconcile the artifact/path mismatch and identify how the committed catalog can be exercised near 4 MiB without adding production test hooks. The supplied excerpts do not show snapshot construction or full legacy behavior. These gaps limit implementation approval but do not change the proposed flush fix.\n\nNo source inspection beyond the pinned excerpts, test execution, or runtime verification was performed. Build readiness remains pending the author checks, independent Linux QA evidence, and full-source review."
+          }
+        ],
+        "decisions": [
+          "Reject immediate process.exit(0) after the stdout write.",
+          "Preserve exact sole-argument export dispatch and natural process termination.",
+          "Require independent slow-pipe validation on Linux before build readiness approval."
+        ],
+        "questions": [
+          "Which repository paths resolve the mismatch between the hello.mjs permission metadata and the export.mjs-only change constraint?",
+          "How can the committed catalog be exercised near 4 MiB using existing data or test facilities?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12515,
+        "output": 1057,
+        "total": 13572,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 30678,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "piped-export",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Technical review complete: recommend exact sole-argument dispatch and natural exit after stdout drains, with Linux slow-pipe verification.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nDisposition: ready for implementation using the approach below. This recommendation does not authorize implementation or release. No checks were executed; conclusions are based on the pinned brief and source/test excerpts.\n\n## Behavior and precedence\n\nCAT-1 applies only when there is exactly one user argument and it equals `--export`: `process.argv.length === 3 && process.argv[2] === '--export'`. That branch must emit the complete catalog snapshot as JSON followed by a final newline, leave stderr empty, and exit 0 after successful output, including when a Linux consumer reads slowly from a pipe. Support snapshots through the stated 4 MiB limit.\n\nEvery other argument vector must reach `runLegacyCli(process.argv.slice(2))` unchanged. Thus no arguments, greeting arguments, unknown flags, repeated `--export`, and `--export` combined with any other argument retain existing greeting or usage behavior under CAT-2 and CAT-3. Export must not override legacy handling merely because the flag appears somewhere in the arguments.\n\nThe excerpt establishes dispatch but does not expose legacy greeting text, usage text, stream selection, or exit statuses. Preserve those semantics; do not invent replacements.\n\n## Smallest implementation\n\nChange only `export.mjs` and `export.test.mjs`; add no dependencies, helper files, or production test-only CLI options. The packet's permission paths name hello-world files, while the brief explicitly names these export files. This is a review-only assignment: no files are being read or changed. The implementation task must provide access to the two authorized export files without expanding the brief's scope.\n\nKeep the exact sole-argument guard and legacy fallback. Serialize the existing snapshot once and append `\\n`. Write that string to stdout and allow Node to exit naturally once pending output drains. Do not call `process.exit(0)`. Successful natural exit supplies status 0; use `process.exitCode` if a specific nonzero status becomes necessary in an existing error path.\n\nA single bounded write is sufficient here: a false return from `stdout.write` signals backpressure, not rejected bytes. Since there are no subsequent chunks to schedule, no new streaming abstraction is required. This assumes the rest of the CLI does not force exit or leave unrelated live handles; inspect the full entry point during implementation.\n\n## Decisive tradeoff and failure paths\n\nImmediate `process.exit(0)` offers explicit termination but can discard pending asynchronous stdout writes to a Linux pipe. A 512-byte fixture can pass while a multi-megabyte snapshot truncates under backpressure. Natural exit fits the completeness requirement with the smallest change.\n\nChunking and waiting for `drain` can bound queued memory for larger or continuous output, but adds unnecessary machinery for one snapshot bounded at 4 MiB. Retain it as a future option only if representative evidence shows a need.\n\nThe successful-output contract assumes a reader that remains connected. A closed pipe or serialization failure must not be converted into a successful export. Preserve existing applicable error handling and avoid swallowing stream errors. The brief does not define a new diagnostic or exact failure status for these cases, so do not add one as an acceptance requirement. No retry or durable deduplication is needed for this side-effect-free export.\n\n## Author checks in export.test.mjs\n\nUse built-in Node facilities and the existing fixture mechanism. Inspect the full tests before choosing fixture injection; do not add a CLI argument that would violate sole-argument dispatch.\n\n- Exact dispatch: test sole `--export`, no arguments, representative existing greeting and usage cases, repeated `--export`, and export mixed with another argument in both orders. Assert stdout, stderr, and status separately against established legacy expectations.\n- Small export: compare complete expected bytes, including the final newline; also parse JSON and compare the full snapshot. Require empty stderr and status 0.\n- Linux slow pipe: launch the actual CLI with a representative snapshot at the 4 MiB boundary and pipe stdout to a deliberately throttled reader that consumes through EOF. Collect all bytes without a harness buffer limit below the payload size. Compare exact bytes and byte length, final newline, full parsed contents, empty stderr, and status 0. Use a finite timeout sufficient for the chosen throttle.\n- Full-entry-point inspection: ensure no later forced exit or unrelated live handle defeats draining or termination. If applicable existing error behavior exists, exercise serialization or stream failure and verify it is not reported as success.\n\nThe large slow-pipe check is the discriminating regression case for the immediate-exit alternative; a tiny fixture or unthrottled capture is insufficient evidence.\n\n## Independent QA strategy\n\nQA must derive its oracle from CAT-1 through CAT-3 and the known catalog fixture, rather than rerunning author assertions as its only evidence. Exercise the exact candidate CLI on Linux with an independently constructed expected byte sequence and a slow downstream reader. Include a near-limit snapshot, read through EOF, and verify every byte, newline, stderr, and exit status. Record candidate identity, Node/Linux versions, fixture byte size, throttle settings, and observed results.\n\nFor compatibility, independently compare the candidate's stdout, stderr, and status with the committed CLI for no arguments, a valid greeting, invalid usage, and mixed/repeated export flags. The mixed-argument case must remain legacy behavior and would reject a loose `includes('--export')` implementation.\n\nBuild verification requires this representative Linux evidence; a small smoke test cannot establish pipe completeness. The current assignment permits no execution, so these remain downstream checks.\n\n## Open evidence needs\n\nThe full source and tests must establish the legacy oracle, snapshot fixture seam, and entry-point lifecycle before implementation is finalized. These are explicit handoff inspection targets, not blockers to this technical recommendation. Product owns any proposed change to acceptance criteria."
+          }
+        ],
+        "decisions": [
+          "Keep exact sole-argument export precedence and preserve all other legacy dispatch.",
+          "Reject immediate process.exit(0); allow pending stdout writes to drain through natural exit.",
+          "Require independent Linux slow-pipe evidence on the exact candidate."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14681,
+        "output": 1379,
+        "total": 16060,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 29
+      },
+      "elapsedMs": 31022,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "piped-export",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed a minimal export branch that preserves legacy dispatch and allows piped stdout to drain, with separate author and independent QA checks.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "## Technical design\n\nThe suggested `process.stdout.write(payload); process.exit(0);` branch is unsafe for CAT-1. On Linux, stdout connected to a pipe is asynchronous; an immediate forced exit can discard buffered output. The existing 512-byte test does not establish correct behavior for a catalog up to 4 MiB and a slow reader.\n\nKeep the exact sole-argument guard: `process.argv.length === 3 && process.argv[2] === '--export'`. Serialize the complete snapshot once with `JSON.stringify(snapshot) + '\\n'`, write it to stdout, and allow Node to exit naturally after pending output drains. Remove the immediate `process.exit(0)`. Keep legacy dispatch exclusively in the `else` branch. Do not add dependencies, manually close stdout, or add success diagnostics.\n\nA single write returning `false` means backpressure, not failure: the data was accepted into the writable buffer. Because this branch has no further chunks to produce, it does not need a drain listener to resume production. Natural process termination permits the queued write to complete and yields exit 0 under successful execution. Avoid `process.exit()` in a write callback as well; forced termination is unnecessary.\n\n## Argument precedence and compatibility\n\n- Exactly `--export` selects export and bypasses the greeting and usage path.\n- No arguments, ordinary greeting arguments, unknown options, repeated `--export`, and `--export` combined with any other argument must pass unchanged to `runLegacyCli(process.argv.slice(2))`.\n- Do not introduce a general flag parser or scan for `--export` anywhere in the argument list. Either would change precedence and could break CAT-2 or CAT-3.\n- Preserve legacy stdout, stderr, and exit status exactly. The supplied excerpt does not define those values, so derive regression expectations from the committed legacy implementation rather than inventing new usage behavior.\n\n## Allowed files\n\nOnly `export.mjs` and `export.test.mjs` may change. Production changes should be limited to export dispatch and successful output completion. Test helpers and fixtures must live within `export.test.mjs`; do not add fixture files, dependencies, package changes, or modify the legacy CLI. The pinned artifacts are reference data; no files were inspected or changed for this review.\n\n## Author checks\n\n1. Keep the small snapshot test, asserting exact serialized bytes including the terminal newline, empty stderr, normal termination, and exit code 0.\n2. Add an end-to-end child-process test with a deterministic catalog near the 4 MiB limit and a genuinely slow pipe consumer. Attach stdout handling immediately, deliberately pause and resume consumption, collect all bytes, and wait for child `close`, not merely `exit`, before asserting results. Drain stderr concurrently. Assert exact expected bytes, full catalog contents, final newline, empty stderr, exit code 0, and no termination signal.\n3. Exercise the sole-argument boundary and legacy cases above, including extra arguments both before and after `--export`. Assert established greeting and usage outputs and statuses.\n4. Use bounded timeouts with cleanup and useful failure diagnostics. Allow enough time for the intentionally slow reader. A timeout is a failed check, not evidence of successful draining.\n\nUse an existing supported way to provide the large snapshot. Do not add a public CLI switch solely for testing. If the committed implementation has no suitable fixture seam, resolve that within the two allowed files before claiming large-payload coverage.\n\n## Independent black-box QA\n\nQA should invoke the actual CLI on Linux with a separately constructed expected catalog and a slow downstream reader. Do not import the implementation or reuse the author's assertion helper as the oracle. Capture the producer's status explicitly rather than relying on the last process's pipeline status. Confirm normal producer termination, exit 0, empty producer stderr, byte-for-byte complete output, and the final newline after the reader reaches EOF.\n\nUse a tiny catalog and a catalog near 4 MiB. For the large case, throttle the reader enough to create pipe backpressure; an ordinary fast buffered capture alone is insufficient. Independently verify the greeting and usage matrix against the committed legacy behavior, including mixed and repeated export arguments. Review the final diff to confirm that only the two permitted files changed and no dependencies were added.\n\n## Risks, questions, and readiness\n\nThe principal risk is silent truncation that small fixtures conceal. Other risks are accidental legacy dispatch after export, broader flag matching, and a test harness that reports process exit before finishing output collection. Broken-pipe behavior is unspecified by the brief and should not expand this change's scope.\n\nOpen evidence questions: the excerpts omit the full snapshot construction, available fixture seam, and exact legacy greeting and usage behavior. Those must be established from committed source before implementation and regression expectations are finalized. Clarify whether the 4 MiB limit includes the final newline if byte-boundary acceptance depends on it; correctness should not rely on that distinction.\n\nNo checks were executed. The design is suitable for implementation; build readiness requires the author checks, independent Linux slow-reader evidence, and allowed-file review to pass."
+          }
+        ],
+        "decisions": [
+          "Preserve the exact sole-argument export guard and existing legacy delegation.",
+          "Remove forced successful termination and let stdout drain through natural process exit.",
+          "Require independent Linux slow-pipe verification in addition to author tests."
+        ],
+        "questions": [
+          "What fixture seam and exact legacy greeting and usage behavior does the full committed source provide?",
+          "Does the 4 MiB limit include the final newline?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12511,
+        "output": 1245,
+        "total": 13756,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 47
+      },
+      "elapsedMs": 35435,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "piped-export",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Technical review complete: use an exact sole-argument export branch, drain stdout through natural exit, and verify full output with an independent Linux slow-reader check.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nDisposition: ready for implementation planning. This review recommends a design; it does not authorize implementation or release. No checks were executed.\n\n## Committed behavior and argument precedence\n\nCAT-1 requires `--export` as the sole argument to emit the complete catalog snapshot, up to 4 MiB, followed by a final newline, with empty stderr and exit status 0. CAT-2 and CAT-3 preserve existing greeting and usage semantics.\n\nThe supplied source excerpt selects export only when `process.argv.length === 3` and `process.argv[2] === '--export'`. Preserve that exact dispatch condition. Every other argument vector must reach `runLegacyCli(process.argv.slice(2))` unchanged, including no arguments, an ordinary greeting argument, unknown options, repeated `--export`, and `--export` before or after another argument. Do not search the argument list for the flag or let it override legacy handling.\n\nThe packet does not include the legacy implementation or its exact expected messages and statuses. Those expectations must come from the committed implementation and existing acceptance fixtures, not be invented here. The excerpt establishes dispatch, but cannot establish complete legacy behavior.\n\n## Smallest technical approach\n\nOnly `export.mjs` and `export.test.mjs` may change. Add no dependencies or extra repository files. Keep the existing catalog source, serialization format, legacy implementation, and dispatch structure.\n\nIn the sole-argument branch, serialize the snapshot once with `JSON.stringify(snapshot) + '\\n'` and write it to stdout. Remove immediate `process.exit(0)` and allow Node to finish pending output and exit naturally. If explicitly assigning a status is necessary, use `process.exitCode = 0`; do not force termination. Ensure control flow cannot fall through into legacy processing after the export write.\n\nA single bounded write is sufficient: the payload is capped at 4 MiB, so incremental serialization and a general streaming abstraction are unnecessary. A false return from `stdout.write()` means backpressure, not failure; Node has queued the write. With no further writes to produce, there is no producer loop to pause. Natural exit allows pending stream writes to finish. Do not add a timeout that can cut off a valid slow reader.\n\nThis recommendation assumes the excerpt represents the relevant process lifecycle. During implementation, inspect `export.mjs` for other forced exits or persistent handles that could defeat natural completion. Address any such issue within the allowed files and existing CLI lifecycle.\n\n## Decisive risk and tradeoff\n\nOn Linux, a large stdout write to a pipe can remain partially queued while a slow downstream reader consumes it. `process.exit(0)` terminates the process synchronously and can discard pending writes while still reporting success. A 512-byte test can pass without exposing this failure.\n\nNatural exit is the smallest fix and preserves the complete-output requirement. Keeping immediate exit gives deterministic termination timing but threatens CAT-1 and is rejected. Fixed delays are also rejected because reader speed is variable. Chunked production with explicit drain handling would help an unbounded producer, but adds complexity without a requirement at this payload size.\n\nSerialization errors and a reader closing the pipe are distinct from ordinary backpressure. Never convert them into apparent successful full exports. Preserve established CLI failure handling where present; the brief does not specify exact diagnostics or statuses for these failures. Empty stderr and exit 0 are the successful-export contract. No retries or durable deduplication are needed for this side-effect-free export.\n\n## Author verification in `export.test.mjs`\n\n- Test sole `--export` with the existing small fixture: exact expected serialized bytes plus one newline, empty stderr, exit 0, and no terminating signal.\n- Add a representative maximum-size case using the existing fixture or snapshot injection mechanism. The serialized catalog should approach the 4 MiB limit; account separately for the required trailing newline. Use the real CLI entry point with stdout as a Linux pipe, not a regular file or terminal. Consume stdout slowly in bounded chunks, capture stderr separately, and wait for both child completion and stdout EOF. Compare all received bytes with the independently constructed expected bytes, including their length and final newline. Do not stop collection when the child emits its exit event.\n- Exercise argument count and precedence: no arguments, a normal greeting, an unknown argument, repeated `--export`, `--export` followed by another argument, and another argument followed by `--export`. Assert legacy stdout, stderr, and status separately against existing contract expectations.\n- Retain existing greeting and usage tests unchanged in intent. Avoid import-time side effects or test-only changes to production CLI semantics.\n\nIf no existing mechanism can supply a large snapshot, use a narrowly scoped fixture seam within the two allowed files while preserving the public CLI. Do not introduce a new public flag, environment contract, dependency, or fixture file merely to support the test.\n\n## Independent QA acceptance strategy\n\nQA must derive expected results from CAT-1 and the approved legacy contract, rather than merely rerun the author's assertions. Test the exact implementation candidate and record its revision, Node version, Linux environment, payload size, and pipe-reader configuration. A temporary external harness may execute the checks without adding repository files.\n\n| Risk or input | Observable result | Required evidence |\n| --- | --- | --- |\n| Sole `--export`, representative catalog near 4 MiB, deliberately slow downstream reader | Complete expected bytes, exactly the required final newline, empty stderr, exit 0, no signal | Actual Linux subprocess with piped stdout; independent expected snapshot and full byte comparison after EOF |\n| Sole `--export`, small catalog | Correct complete snapshot and successful status | Public CLI invocation with stdout and stderr captured separately |\n| Extra or repeated export arguments | Existing legacy result; export must not take precedence | Contract-derived argument matrix with exact stdout, stderr, and exit assertions |\n| Existing greeting and usage invocations | Existing outputs and statuses preserved | Committed legacy fixtures or independently recorded baseline expectations |\n| Reader closes its pipe early | No claim of successful complete delivery; failure handling remains consistent with the existing CLI | Fault-injection observation; any exact new failure contract requires Product clarification |\n\nThe large slow-reader check is the discriminating case against immediate exit. As a test-quality check, QA should establish that the same harness detects incomplete output from the supplied immediate-exit branch under the representative Linux conditions. A tiny snapshot, successful JSON parse alone, or a redirected regular file does not establish the required pipe behavior. Reader delays and harness timeouts are test controls, not new product latency requirements.\n\n## Handoff constraints\n\nThe implementer must preserve exact argument dispatch, change only the two allowed files, introduce no dependencies, and avoid forced exit while output is pending. The downstream plan must name a permitted Linux execution path and a way to provide the representative snapshot. The packet supplies neither execution results nor full legacy expectations; both must be gathered during implementation and verification. These are downstream evidence requirements, not blockers to this technical recommendation."
+          }
+        ],
+        "decisions": [
+          "Recommend natural process exit after the sole-argument export write; reject immediate process.exit(0) because it can truncate piped output.",
+          "Preserve exact argument count and delegate every other invocation unchanged to the legacy CLI.",
+          "Require independent contract-derived QA on the exact candidate, including a representative Linux slow-reader pipe check."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14677,
+        "output": 1665,
+        "total": 16342,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 73
+      },
+      "elapsedMs": 44871,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "retry-after-commit",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed durable operation-ID deduplication with atomic job creation and independent acceptance checks.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "## Smallest technical design\n\nExtend `createImport(db, account, payload, operationId)` with a required caller-supplied stable operation ID. Validate it before writes. The caller reuses the ID for every attempt of one logical import, including after restart, and supplies a new ID for each intentional import.\n\nUse the provisioned request table with a unique key on `(account, operationId)` and a stored job ID. In one database transaction:\n\n1. Look up the request key. If it exists, return its original `{jobId}` without creating a job.\n2. Otherwise insert the job and its request mapping, then commit before returning `{jobId}`.\n3. If concurrent attempts race on the unique key, roll back the losing transaction completely, including its job insert. Read the winning committed mapping in a fresh transaction and return its job ID. Handle only the expected request-key uniqueness conflict this way; propagate unrelated failures.\n\nUse the database's supported transaction and conflict semantics. Do not catch a uniqueness error and continue querying inside an aborted transaction. The job and mapping must either both commit or neither commit.\n\nThis meets CAT-1 through durable uniqueness and atomicity, CAT-2 through distinct operation IDs even for identical payloads, and CAT-3 by returning the mapped original job ID. A payload-hash memory cache fails intentional identical imports and cannot preserve correctness across process restarts.\n\n## Argument precedence and process behavior\n\nThe excerpt exposes a function, not CLI parsing; no command-line or environment precedence is evidenced. Preserve the existing first three positional arguments and add the operation ID explicitly as the fourth. The authenticated account plus explicit operation ID determines request identity; payload equality does not override it. Do not generate a fresh ID inside `createImport` or silently fall back to a payload hash when the ID is missing.\n\nIf commit succeeds but the response is lost, the attempt may report a transport failure. Retrying with the same key returns the committed job ID. Restarting the client or service must not change that result. Transaction failure before commit leaves neither a job nor a mapping.\n\n## Allowed files and readiness\n\nImplementation and author-test changes are limited to `imports.mjs` and `imports.test.mjs`. The request-table migration is already approved and provisioned; no migration, dependency, CLI, or unrelated refactor is proposed. The input artifact labels and example read paths do not expand this write scope.\n\nThe existing successful-import check is insufficient. This is a design review of the supplied excerpts; no checks were executed. Build readiness requires verifying the actual database transaction API and passing the checks below.\n\n## Author checks\n\nUse the durable fixture database and assert persisted job and mapping counts as well as returned IDs:\n\n- Preserve the successful-import case with an explicit operation ID.\n- Retry the same account and ID sequentially: one job, one mapping, identical returned IDs (CAT-1, CAT-3).\n- Inject response loss after commit, restart the client, and retry with the persisted caller ID: one job and the original ID (CAT-1, CAT-3).\n- Submit identical payloads with distinct operation IDs: two jobs and distinct IDs (CAT-2).\n- Race concurrent attempts for one key: one committed job and mapping; successful attempts return the same ID. Ensure the losing transaction leaves no orphan job.\n- Inject failure between job insertion and mapping completion: rollback leaves neither record; a subsequent retry creates one job.\n- Reject a missing or invalid operation ID before writes. Verify the same operation ID in different accounts creates independent jobs.\n\n## Independent black-box QA\n\nQA should independently exercise the public import boundary against a durable test database, without using the author's deduplication helper or mocking its result:\n\n1. Submit an import with a recorded operation ID and discard the response after confirmed commit. Restart the client and service, then retry. Verify through independent persisted-state inspection that exactly one job exists and that the retry ID matches the original committed job (CAT-1, CAT-3).\n2. Submit two intentional imports with identical payloads and distinct IDs. Verify two jobs and distinct returned IDs (CAT-2).\n3. Send concurrent requests with one account and operation ID. Verify one persisted job and a consistent returned ID for all successful responses (CAT-1, CAT-3).\n\nQA owns its scenarios and observations separately from author tests. These checks are proposed, not executed.\n\n## Risks and open questions\n\n- Confirm the actual request-table key, transaction API, isolation behavior, and uniqueness-error identification before implementation.\n- Confirm every caller can supply and retain its operation ID across restart. Requiring a fourth argument changes the existing call contract; if callers outside the allowed files need changes, scope must be resolved before shipping.\n- The brief does not define reuse of one operation ID with a different payload. The smallest proposal treats the key as authoritative and returns the original job ID; confirm whether a conflict error is required instead. Neither policy may create a second job.\n- Retain request mappings for the full supported retry lifetime. Deleting them while retries remain possible invalidates CAT-1.\n\nNo blocker prevents this design recommendation; the integration details above remain readiness gates."
+          }
+        ],
+        "decisions": [
+          "Use durable uniqueness on account and caller-supplied operation ID, with atomic job and mapping writes.",
+          "Reject the payload-hash memory-cache proposal.",
+          "Limit implementation changes to imports.mjs and imports.test.mjs; keep independent QA separate from author tests."
+        ],
+        "questions": [
+          "Does the provisioned request table support the proposed account-scoped unique key and required transaction semantics?",
+          "Can all callers supply and persist operation IDs without changes outside the allowed files?",
+          "Should reuse of an operation ID with a different payload return the original job ID or a conflict error?",
+          "What retry lifetime must request-mapping retention support?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12530,
+        "output": 1323,
+        "total": 13853,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 59
+      },
+      "elapsedMs": 33599,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "retry-after-commit",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Recommend durable deduplication by account and caller-supplied operation ID, with the request mapping and job committed atomically.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nReady for implementation planning within the approved scope. This recommendation does not authorize implementation or release. No checks were executed; findings below come from the supplied source and test excerpts.\n\n## Committed behavior and required change\n\nThe current `createImport(db, account, payload)` unconditionally inserts a job and returns `{jobId: job.id}`. A retry therefore reaches another insert. The existing author check establishes only that one successful call returns an ID; it does not establish CAT-1, CAT-2, or CAT-3.\n\nPreserve the successful return shape and payload handling while adding a required, caller-supplied operation ID. Proposed interface: `createImport(db, account, payload, operationId)`. The caller generates the ID once per logical import and retains it across timeouts and process restarts. Separate intentional imports use different IDs, including when their payloads are identical. Do not generate a fresh ID inside this function or fall back to a payload hash when an ID is absent.\n\nThere is no CLI in the pinned source, so command-line argument count, flag precedence, stdout, stderr, and process exit behavior are not applicable. At the function boundary, validate the required operation ID before database mutation; then the durable mapping for `(account, operationId)` takes precedence over creating a job. Payload equality does not determine operation identity.\n\n## Smallest design\n\nUse the already provisioned request table and its unique key on `(account, operationId)`. Scope identity by account so one account cannot obtain another account's job through an operation ID collision.\n\nWithin one database transaction:\n\n1. Claim the request key using the database uniqueness constraint.\n2. If this transaction claims it, insert the job and associate its ID with the request record.\n3. Commit the request mapping and job together, then return `{jobId}`.\n4. If another transaction already owns the key, resolve the committed mapping and return its original job ID. Handle the database's uniqueness-conflict semantics correctly: if the conflict aborts the transaction, roll it back before reading the winner's mapping.\n\nThe atomic boundary is the durable request record, associated job, and mapping between them: all commit together or none persist. Never commit an incomplete mapping. A concurrent caller must wait for the winning transaction's outcome or resolve its committed result; an uncommitted claim is not a completed operation.\n\nRecommend treating an operation ID as immutable intent: reject reuse with a different payload rather than silently accepting new intent under an old ID. Reuse existing payload validation/comparison facilities; avoid introducing a new canonicalization dependency. Product must confirm the externally visible mismatch error contract before that behavior becomes acceptance criteria. This does not affect the required same-intent retry behavior.\n\nRetain mappings for the supported replay lifetime. The brief gives no expiry bound, so do not add expiration or deletion in this change.\n\n## Failure walkthrough\n\nIf a job commits but its response is lost, a subsequent call with the same account and operation ID finds the durable mapping and returns the original ID. A process restart cannot remove that mapping. If failure occurs before commit, rollback removes both the claim and job, allowing a later retry to create one job. Concurrent replays contend on the unique request key; only one committed job can result. A read-before-insert check alone cannot enforce this under concurrency.\n\nOnly the uniqueness conflict for this request key should become a replay result. Preserve other database, validation, and terminal errors. Do not convert arbitrary insert failures into successful retries or broadly retry transaction errors.\n\nMaximum retries added by this design: zero. The existing client timeout-retry count and original total time budget are not supplied. Preserve both without resetting the deadline; their numeric values must be documented in the implementation plan. This recommendation makes repeated mutation attempts safe rather than adding a retry loop. A mapping lookup is a side-effect-free read and needs no separate durable deduplication mechanism.\n\n## Scope and tradeoff\n\nImplementation files: `imports.mjs` and `imports.test.mjs` only. Use the existing database transaction and uniqueness facilities. The request-table migration is already approved and provisioned; do not add migration files, dependencies, client modules, or cache infrastructure.\n\nReject the proposed in-memory payload-hash cache. It offers inexpensive local lookup, but disappears on restart, cannot coordinate concurrent processes, and merges intentionally separate identical imports, violating CAT-1 and CAT-2. A durable payload-hash key still violates CAT-2. A separate mapping commit can leave a job without replay protection or a mapping without a job. Database uniqueness plus one transaction supplies the required correctness boundary.\n\nRequiring an operation ID changes the function's input contract. The implementation plan must establish that callers can supply and persist it within the authorized integration. If a required caller change lies outside the two allowed files, the SDM must route that scope decision; do not invent an unsafe compatibility fallback. Existing success tests should supply an operation ID and retain their return-shape assertion.\n\n## Author verification near the change\n\nUse the fixture database and its fault injection, including real transaction and uniqueness behavior:\n\n- First call: one job and one complete mapping; returned ID matches the job.\n- Same account and operation ID replay: one job total and exactly the original ID (CAT-1, CAT-3).\n- Inject response loss after commit, restart the client, then retry using the retained ID: one job total and the committed job's ID (CAT-1, CAT-3).\n- Identical payload with two distinct operation IDs: two jobs with distinct IDs (CAT-2). This discriminates against payload-hash deduplication.\n- Concurrent calls with one key through independent database connections: one committed job and the same returned ID for every successful call. Verify the conflict recovery path.\n- Inject failure after the request claim and after job insertion, before commit: neither partial state persists; retry can complete once.\n- Same operation ID in different accounts: separate jobs and no cross-account result leakage.\n- Missing operation ID: validation failure with no writes. Unrelated database failure: original error propagates with no partial commit.\n- If Product accepts the mismatch contract, reuse one key with changed payload: explicit conflict and no additional job.\n\n## Independent QA acceptance strategy\n\nQA must derive checks from CAT-1 through CAT-3 and run them on the exact candidate, rather than merely rerunning the author's suite. Exercise the exported function through a separate harness with an independently maintained ledger of logical operation IDs and returned IDs. Use the fixture's durable database across fresh client processes and independent connections. Inspect committed job counts through a read-only database query as the oracle, not the implementation's request lookup helper.\n\nFor CAT-1 and CAT-3, record the job committed before injected response loss, restart the client, replay the retained operation ID, and require exactly one job and its original ID. Repeat with overlapping requests and with pre-commit failure. For CAT-2, submit equal payloads with different IDs and require two distinct jobs. Include a normal first-success case to confirm the unchanged `{jobId}` result shape. Record candidate identity, injected fault position, process lifecycle, returned IDs, and committed counts as evidence.\n\n## Remaining decisions\n\nConfirm the existing client retry maximum and original total time budget, caller persistence/integration feasibility within scope, and the Product-owned error contract for operation-ID reuse with changed payload. These are planning inputs, not blockers to completing this technical review."
+          }
+        ],
+        "decisions": [
+          "Use account-scoped stable operation IDs rather than payload equality.",
+          "Atomically commit the durable request mapping and job under a uniqueness constraint.",
+          "Add no retry loop, dependencies, migration files, or cache infrastructure.",
+          "Require independent contract-derived QA on the exact candidate."
+        ],
+        "questions": [
+          "What are the existing client maximum retry count and original total time budget?",
+          "Can the caller persist and supply operation IDs without changes outside imports.mjs and imports.test.mjs?",
+          "What error contract does Product require when an operation ID is reused with a different payload?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14692,
+        "output": 1843,
+        "total": 16535,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 75
+      },
+      "elapsedMs": 47258,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "retry-after-commit",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed durable idempotency by account and caller-supplied operation ID, with atomic job creation and independent failure-recovery checks.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nApprove the durable request-mapping approach. A memory cache keyed by payload hash cannot satisfy CAT-1 across restarts and would incorrectly combine separate imports under CAT-2.\n\n## Smallest change and argument precedence\n\nExtend the existing entry point to `createImport(db, account, payload, operationId)`, preserving the order of existing arguments. Require a nonempty caller-supplied operation ID before any database write. The caller must retain that ID across timeouts and process restarts and use a new ID for each intentionally separate import. Do not generate a replacement ID inside this function or derive it from the payload.\n\nThe explicit operation ID identifies the logical import within the supplied account. Payload equality never overrides it: equal payloads with different IDs create separate jobs; retries with the same account and ID return the recorded job ID. Account is part of the uniqueness key, so IDs in different accounts do not collide. There are no CLI flags, environment variables, or other argument-precedence mechanisms in the supplied source.\n\nUse the provisioned request table with a database uniqueness constraint on `(account, operationId)`. Within one transaction, resolve an existing mapping or insert a job and its request mapping. Commit both records atomically before returning `{jobId}`. On a concurrent uniqueness conflict, roll back the losing transaction, including its job insertion, and read the committed winning mapping using the database's supported transaction/retry behavior. Do not catch unrelated database failures as duplicate requests. A pre-insert lookup alone is insufficient.\n\nFor this minimal design, a committed mapping takes precedence over a later payload supplied with the same account and operation ID: return the original job ID without creating or modifying a job. Callers must treat operation IDs as immutable logical-import identifiers. Adding payload-mismatch rejection would need an agreed payload comparison contract and is outside this minimum change.\n\n## Allowed files and boundaries\n\nImplementation changes are limited to `imports.mjs` and `imports.test.mjs`. The request-table migration is already approved and provisioned; do not add migration, dependency, caller, or unrelated file changes. Treat the pinned excerpts as reference data. The task's `hello.*` read-path names do not expand the implementation scope.\n\nThe exposed function currently accepts three arguments. Requiring the fourth argument changes its caller contract. Build readiness therefore depends on confirming that the calling integration already supplies, durably retains, and reuses an operation ID; modifying that integration would require a scope change.\n\n## Risks and evidence gates\n\n- Transaction behavior must prevent orphan jobs on uniqueness conflicts and make the winning mapping visible after rollback. Verify this against the actual database adapter rather than assuming a particular API or isolation behavior.\n- Request mappings must survive client and server restarts and remain available for the entire supported retry lifetime. Deleting mappings can permit duplicate jobs.\n- Fault injection must drop the response after a successful commit, not merely fail before persistence. Otherwise it does not exercise the stated failure.\n- A returned ID alone does not prove at-most-once creation. Check durable job counts and mapping consistency as well.\n\n## Author checks in `imports.test.mjs`\n\nRetain the successful-import assertion and add focused integration checks using the fixture database:\n\n1. **CAT-1/CAT-3:** Commit an import, lose its response, restart the client against the same durable database, then retry with the same account, payload, and operation ID. Assert exactly one job and one mapping exist and that the retry returns the committed job's ID.\n2. **CAT-2:** Submit identical payloads under two distinct operation IDs in the same account. Assert two jobs, two mappings, and distinct returned IDs.\n3. Race concurrent requests with the same account and operation ID. Assert all successful responses identify one job and that no losing transaction leaves an extra job.\n4. Inject failure between job insertion and mapping insertion. Assert neither record commits; a subsequent retry creates exactly one mapped job.\n5. Check account isolation, missing/invalid operation-ID rejection before writes, and the documented behavior when an existing ID is reused with a changed payload. Confirm unrelated database errors propagate.\n\n## Independent black-box QA\n\nQA should exercise the public import entry point using its own harness and durable fixture database, independently of author-test helpers and implementation branches. Induce response loss after commit, terminate and restart the client, then retry the preserved operation ID. Compare the returned ID with persisted state and verify one job. Separately submit identical payloads with distinct IDs and verify two jobs. Race duplicate requests from separate clients and verify one durable job and a common returned ID. Inspect durable results through fixture inspection or a supported read interface, not internal function mocks.\n\nReadiness requires author-check results plus independent QA evidence covering CAT-1, CAT-2, and CAT-3, with the operation IDs, failure point, returned IDs, and durable counts recorded without sensitive payload data. No checks were executed for this review."
+          }
+        ],
+        "decisions": [
+          "Use durable account-scoped operation IDs and atomic job/request-mapping writes.",
+          "Reject payload-hash caching as the idempotency mechanism.",
+          "Existing mappings return the original job ID, including when a caller reuses an ID with a changed payload."
+        ],
+        "questions": [
+          "Does the calling integration already persist and supply operation IDs across retries and restarts?",
+          "Which transaction and uniqueness-conflict recovery APIs does the provisioned database adapter expose?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12528,
+        "output": 1267,
+        "total": 13795,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 53
+      },
+      "elapsedMs": 31500,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "retry-after-commit",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Recommended durable operation-ID deduplication with an atomic job/request transaction and independent failure-path verification.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nReady for implementation planning against CAT-1–CAT-3. This recommendation does not authorize implementation or release. No checks were executed; conclusions below come from the supplied source and test excerpts.\n\n## Current behavior and scope\n\n`createImport(db, account, payload)` unconditionally inserts a job and returns `{jobId: job.id}`. A retry repeats the insert, so the source has no protection against a committed import whose response is lost. The existing author check establishes only the intended single-success shape; it supplies no evidence for retries, restart, or concurrency.\n\nOnly `imports.mjs` and `imports.test.mjs` are implementation scope. The request-table migration is already approved and provisioned; do not add a migration, dependency, cache service, or extra file. The packet's artifact labels mention a CLI, but the supplied public interface is a function: argument-count precedence, stdout/stderr, and process exit handling are not applicable to this change.\n\n## Recommended interface and behavior\n\nExtend the interface to `createImport(db, account, payload, operationId)`. Require a valid, caller-supplied stable operation ID before any database mutation. The caller reuses that ID for every attempt at one logical import, including after restart, and uses a fresh ID for an intentionally separate import. Never generate a fresh ID inside a retry and never derive identity from payload equality. Existing calls without an operation ID must fail explicitly before inserting; silently accepting them would leave CAT-1 unprotected. Caller integration is outside the supplied files and must supply the ID before deployment.\n\nUse the provisioned request table with a unique key on `(account, operationId)` and a durable mapping to the original job ID. Account scoping prevents another account's operation ID from returning an unrelated job. Preserve the successful return shape `{jobId}`.\n\nOperation identity takes precedence over a new insertion: a matching committed request returns its stored job ID; an unseen ID creates one job and its mapping. Equal payloads with different operation IDs remain separate imports. Do not introduce payload hashing or new payload-comparison policy for this task. Callers must reuse the same import intent with an ID; handling intentional ID reuse with changed input is not specified by CAT-1–CAT-3 and must not become a new acceptance gate.\n\n## Atomic boundary and concurrency\n\nWithin one database transaction, resolve or claim the unique request key, create the job only for the winning new request, and persist its job-ID mapping. The durable request record and job effect must commit together or neither may persist. A failed or losing attempt must leave no extra job or incomplete committed mapping.\n\nUse the database's existing transaction and uniqueness facilities. A preliminary lookup alone is insufficient: simultaneous misses must still converge through the uniqueness constraint. If the chosen implementation inserts a job before discovering a conflicting request key, roll back that entire attempt, then read the winner's committed mapping in a usable transaction. Do not swallow arbitrary database failures as duplicate requests. Respect the database's isolation and conflict semantics so a loser can observe the committed winner before returning its ID.\n\nAfter commit, return the persisted job ID. If the response is lost, or commit acknowledgement is ambiguous, replay with the same operation ID resolves whether the original transaction committed. A process restart must not affect this behavior because the identity and mapping are durable.\n\n## Retry limits and errors\n\nThis function need not add a retry loop: maximum additional automatic retries introduced here is zero, and the caller's original total timeout budget remains unchanged. The packet supplies neither its numeric retry count nor its numeric total budget; do not invent or increase either. Existing caller retries must retain the same operation ID. If internal conflict handling needs another database attempt, it must stay within the existing request budget and must not become an unbounded retry policy.\n\nPreserve terminal database errors. A precommit failure must roll back both records and surface the failure; a later caller attempt using the same ID may then create the job. Do not turn validation, storage, or permission errors into successful replay responses. No external side effect is shown in the source; the atomicity claim covers the local job and request mapping.\n\n## Rejected alternatives and tradeoff\n\nA memory cache keyed by payload hash is simple and avoids durable lookup work, but loses history on restart, cannot reliably coordinate concurrent processes, and merges intentionally separate imports with identical payloads. It therefore threatens CAT-1, CAT-2, and CAT-3. A durable payload hash also violates CAT-2. A lookup followed by independent writes leaves a race and a crash window. A new random operation ID on each attempt defeats deduplication.\n\nThe recommended transaction adds persistent storage and database coordination, using facilities already provisioned. The decisive evidence is that the real database transaction and uniqueness semantics prevent a second committed job during replay and contention, while distinct operation IDs remain independent.\n\n## Author checks in imports.test.mjs\n\nUse the existing durable fixture and response-loss injection. Inspect persisted jobs and mappings as well as returned values; an ID-only assertion cannot establish at-most-once behavior.\n\n| Input or fault | Expected observation | Evidence needed |\n| --- | --- | --- |\n| First valid operation | One job, one mapping, returned ID equals the mapped job ID | Existing success check adapted to supply an operation ID |\n| Sequential replay of the same account and ID | Same returned ID; still exactly one job and mapping | Repeated public calls and database assertions |\n| Commit succeeds, response is lost | Retry returns the original persisted job ID; exactly one job | Postcommit response-loss injection |\n| Same loss followed by client restart | Reconstructed client using the same database and operation ID returns the original ID | Durable fixture retained across restart |\n| Concurrent calls with the same account and ID | All successful responses identify one job; no orphan jobs | Barrier-driven overlap using independent database connections |\n| Failure between job and mapping writes | Neither record persists; subsequent successful attempt creates one pair | Transaction fault injection |\n| Same payload, two distinct operation IDs | Two jobs with distinct IDs and two mappings | Discriminating CAT-2 negative case against payload hashing |\n| Missing or invalid operation ID | Explicit validation failure with no persisted records | Boundary validation checks |\n| Same operation ID in different accounts | Independent jobs; no cross-account replay | Account isolation check |\n| Terminal database failure | Original failure surfaces; no partial records | Representative database error injection |\n\n## Independent QA strategy\n\nQA must derive its oracle from CAT-1–CAT-3 and exercise the exact candidate through exported `createImport`, using an independently written harness. Rerunning the author's tests alone is not independent QA.\n\nQA should record the committed job ID through independent database observation, discard the first response after commit, restart the client, and submit the same account, payload, and operation ID. Its oracle is exactly one committed job and a returned ID equal to that independently observed original ID. Repeat with concurrent callers on separate connections to verify the uniqueness boundary. Then submit identical payloads under two fresh operation IDs and require two distinct jobs. This last case must fail an implementation keyed only by payload hash.\n\nUse the target database engine, or an environment demonstrably matching its transaction, uniqueness, and persistence semantics; a process-local mock cannot establish restart or concurrent-commit correctness. These are planned acceptance checks, not executed results. No load or timing target was supplied, so a smoke test must not be represented as proving one.\n\n## Handoff constraints and open details\n\nBefore coding, inspect the provisioned request schema and database API to select the exact transaction and conflict-recovery calls. The excerpts do not show those APIs. Confirm that the provisioned uniqueness key represents account-scoped operation identity and that request mappings remain available for the supported replay lifetime; no finite replay horizon is stated, so this change must not expire them.\n\nThe implementation handoff must also identify the caller path that supplies and retains operation IDs across restart. These are implementation and integration details to verify, not blockers to this technical recommendation. If the provisioned schema cannot enforce the required identity or atomicity within scope, return the conflict to SDM; Product owns any proposed change to CAT-1–CAT-3."
+          }
+        ],
+        "decisions": [
+          "Use caller-supplied stable operation IDs scoped by account, with a durable unique request mapping.",
+          "Commit the job and request mapping atomically; preserve the original job ID on replay.",
+          "Reject payload-hash caching and require independent contract-derived QA on the exact candidate."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13435,
+        "output": 1876,
+        "total": 15311,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 57
+      },
+      "elapsedMs": 47528,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "approve-with-optional-note",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Approved implementation plan cli-r7.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Approved cli-r7. The existing argument-count gate preserves the two-argument usage error before routing `--list-pets`, which works only as a sole argument, while preserving the no-argument greeting.\n\nThe plan stays within the approved files, `hello.mjs` and `hello.test.mjs`, and adds no dependencies. Keeping `renderCatalog` is acceptable.\n\nThe evidence gates fit CAT-1/2/3: author tests are separate from independent QA of the exact candidate. QA must assert exit status, stdout, and stderr; CAT-1 must parse the JSON and verify its final newline, while CAT-2 greeting and CAT-3 usage remain unchanged. Coverage includes ordinary and quoted greetings and `--list-pets` with extra arguments.\n\nProduct agreement is recorded for cli-r7. This approves the plan only; no checks were executed for this signoff."
+          }
+        ],
+        "decisions": [
+          "Approve cli-r7 within the stated scope and evidence gates."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12441,
+        "output": 240,
+        "total": 12681,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 0
+      },
+      "elapsedMs": 7630,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "approve-with-optional-note",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Approved plan revision cli-r7.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "# Lead Engineer agreement\n\n**Decision: Approve cli-r7.** The plan satisfies the accepted technical review and is ready for implementation within the agreed scope.\n\nThe existing argument-count gate preserves the two-argument error and ensures `--list-pets` works only as a sole argument. Changes are limited to `hello.mjs` and `hello.test.mjs`, with no new dependencies.\n\nPlanned verification separates author tests from independent QA on the exact candidate. QA uses its own contract-derived cases and oracle, checking exit status, stdout, and stderr across CAT-1/2/3, including parsed JSON and its final newline, unchanged ordinary and quoted greetings, and rejection of `--list-pets` with extra arguments.\n\nRequired Product agreement is recorded for cli-r7. Retaining `renderCatalog` is consistent with the accepted review; renaming it is optional and is not an approval gate.\n\nNo checks were executed during this review. This agreement approves the implementation plan, not implementation or release."
+          }
+        ],
+        "decisions": [
+          "Approve cli-r7 without required changes."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14607,
+        "output": 291,
+        "total": 14898,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 24
+      },
+      "elapsedMs": 8804,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "approve-with-optional-note",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Approved plan revision cli-r7.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Approved plan revision **cli-r7**. It fits the accepted technical approach, scope, and evidence gates.\n\n- The existing argument-count gate precedes flag routing, so `--list-pets` works only as a sole argument while preserving the no-argument greeting and two-argument usage error.\n- Changes are limited to `hello.mjs` and `hello.test.mjs`, with no dependencies. Keeping `renderCatalog` is acceptable.\n- Author testing and independent QA of the exact candidate are separate. QA must verify CAT-1 parsed JSON and its final newline, unchanged CAT-2 greetings and CAT-3 usage, and exact exit status, stdout, and stderr, including extra-argument cases.\n- The submitted plan records required Product agreement for cli-r7.\n\nThis approves the plan only; no checks were executed. No open questions or blockers."
+          }
+        ],
+        "decisions": [
+          "Approve cli-r7 for implementation and testing within the stated scope and evidence gates."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13700,
+        "output": 241,
+        "total": 13941,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 0
+      },
+      "elapsedMs": 7746,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "approve-with-optional-note",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Approved implementation plan cli-r7.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "# Lead Engineer agreement\n\n**Decision: Approve cli-r7 for implementation.**\n\nThe plan satisfies the accepted technical review within the authorized scope: only hello.mjs and hello.test.mjs change, with no dependencies. Keeping the argument-count gate before routing --list-pets preserves the two-argument error and limits the flag to a sole argument. Retaining renderCatalog is acceptable; renaming is optional.\n\nThe planned verification covers CAT-1/2/3: parsed JSON and its final newline, unchanged ordinary and quoted greetings, unchanged usage behavior, and --list-pets with extra arguments. Independent QA will exercise the exact candidate with its own contract-derived cases and oracle, checking exit status, stdout, and stderr separately from the author’s tests.\n\nRequired Product agreement is recorded for cli-r7. No plan revision is required. This approves the implementation plan, not release. No checks were executed during this review."
+          }
+        ],
+        "decisions": [
+          "Approve plan revision cli-r7."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13350,
+        "output": 266,
+        "total": 13616,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 19
+      },
+      "elapsedMs": 8811,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "same-test-twice",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan test-r4 does not meet the accepted independent verification gate.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Not approved.\n\nThe plan counts an independent actor rerunning the author's tests with identical fixtures and expected values as CAT-1 through CAT-3 approval. The accepted review explicitly requires independent verification at the CLI process boundary; author tests do not satisfy that gate.\n\nRequired change: Retain the author tests, but require independent QA to design and run black-box checks against the exact candidate, verifying argument precedence, stdout, stderr, and exit status for CAT-1, CAT-2, and CAT-3. Tie the evidence to that candidate and keep approved writes limited to `hello.mjs` and `hello.test.mjs`.\n\nNo checks were executed. Approval remains blocked until the plan includes this evidence gate."
+          }
+        ],
+        "decisions": [
+          "Reject plan test-r4 pending an independent black-box QA evidence gate."
+        ],
+        "questions": [],
+        "blockers": [
+          "The proposed QA rerun duplicates author tests and cannot count as the required independent CAT-1 through CAT-3 verification."
+        ]
+      },
+      "usage": {
+        "input": 13650,
+        "output": 270,
+        "total": 13920,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 27
+      },
+      "elapsedMs": 9581,
+      "pass": false,
+      "issues": [
+        "trace the false independence and require a different oracle"
+      ]
+    },
+    {
+      "case": "same-test-twice",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan test-r4 is not approved because its QA step lacks the required independent verification.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Plan revision: test-r4\n\nDecision: Blocked; revision required.\n\nThe accepted technical review requires independent verification of CAT-1, CAT-2, and CAT-3 against the exact candidate at the CLI process boundary. A separate QA actor rerunning the author's tests with identical fixtures and expected values does not provide an independent oracle. Two passing receipts from that suite cannot satisfy this gate.\n\nRevise the plan so independent QA derives black-box checks and expected results from the accepted contract, invokes the exact candidate as a CLI process, and verifies arguments, stdout, stderr, and exit status separately. Include contract-derived negative and compatibility cases. Record the candidate identity in both author and QA evidence so the results refer to the same candidate.\n\nKeep implementation writes within hello.mjs and hello.test.mjs. Specify a permitted execution method for independent checks without adding unauthorized files; the existing pinned Docker environment may be used. Author tests remain useful supporting evidence.\n\nNo checks were executed. Approval can be reconsidered once the revised plan includes this downstream verification; completed test results are not required for plan agreement."
+          }
+        ],
+        "decisions": [
+          "Reject counting an independent actor's rerun of author tests as independent CAT-1 through CAT-3 verification."
+        ],
+        "questions": [],
+        "blockers": [
+          "Plan test-r4 must add contract-derived independent CLI checks with an independent oracle against the exact candidate."
+        ]
+      },
+      "usage": {
+        "input": 13298,
+        "output": 345,
+        "total": 13643,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 18
+      },
+      "elapsedMs": 10741,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "same-test-twice",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan test-r4 does not meet the accepted independent verification gate.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Not approved.\n\nThe plan makes independent QA rerun the author's tests with the same fixtures and expected values, then counts both receipts as CAT-1 through CAT-3 approval. The accepted technical review explicitly states that author tests do not substitute for independent evidence.\n\nRequired change: retain author tests, but require independent QA to author and run black-box checks against the exact candidate at the CLI process boundary, verifying arguments, stdout, stderr, and exit status for CAT-1, CAT-2, and CAT-3. Keep repository writes limited to hello.mjs and hello.test.mjs; describe how independent checks will run without expanding that scope. Approval must depend on the independent evidence.\n\nNo checks were executed. The supplied artifacts do not include the committed source or detailed CAT requirements, so exact argument precedence and parser behavior cannot be independently assessed here."
+          }
+        ],
+        "decisions": [
+          "Withhold approval until the plan requires independent black-box CLI verification."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan explicitly excludes independently authored black-box checks and incorrectly treats repeated author-test receipts as CAT-1 through CAT-3 approval."
+        ]
+      },
+      "usage": {
+        "input": 13652,
+        "output": 268,
+        "total": 13920,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 8689,
+      "pass": false,
+      "issues": [
+        "trace the false independence and require a different oracle"
+      ]
+    },
+    {
+      "case": "same-test-twice",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan test-r4 is not approved: its QA step duplicates author tests and does not satisfy the accepted independent verification gate.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "# Lead Engineer agreement\n\n**Plan revision:** test-r4  \n**Decision:** Blocked; revision required.\n\nThe accepted technical review requires independent verification of CAT-1, CAT-2, and CAT-3 against the exact candidate at the CLI process boundary. Rerunning `node --test hello.test.mjs` with the author's fixtures and expected values supplies another execution receipt, but no independent oracle. Counting both receipts as acceptance evidence does not meet that gate.\n\nRevise the plan to retain the author tests and add independent QA checks derived from the accepted contract. QA must exercise the exact candidate as a CLI process and independently determine expected argument handling, stdout, stderr, and exit status for each applicable criterion. Include a contract-derived negative or compatibility case that distinguishes correct behavior from a plausible incorrect implementation. Record the candidate identity, invocation, expected and actual results, and execution environment so the evidence is attributable to the reviewed candidate.\n\nKeep repository writes limited to `hello.mjs` and `hello.test.mjs`. Specify a permitted execution path for independent process-boundary checks, such as an external QA harness in the pinned Docker environment without additional repository files. Author-test receipts remain supporting evidence, not substitutes for independent QA.\n\nThe plan can be reconsidered once it specifies this verification work; the downstream checks need not already have run for plan approval. If independent verification is to be removed or weakened instead, that acceptance-criteria change belongs to Product.\n\nNo checks were executed in this review. This decision does not authorize implementation or release."
+          }
+        ],
+        "decisions": [
+          "Reject test-r4 because the proposed independent QA step reuses the author's oracle and fails the accepted verification gate.",
+          "Preserve the approved write scope of hello.mjs and hello.test.mjs."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan must add contract-derived independent CLI checks on the exact candidate, covering arguments, stdout, stderr, and exit status for CAT-1 through CAT-3, with a permitted execution path and attributable evidence."
+        ]
+      },
+      "usage": {
+        "input": 13300,
+        "output": 500,
+        "total": 13800,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 36
+      },
+      "elapsedMs": 14294,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "rollback-schema",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan schema-r9 is not approved because it breaks mixed-version operation and binary-only rollback, and lacks evidence that rollout writes remain usable after rollback.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: BLOCKED — revise schema-r9 before approval.\n\nRenaming item_label before deployment immediately breaks previous workers, which require that column. Restoring the previous binary while leaving this migration applied cannot restore service. Fresh-database tests with only new workers do not establish CAT-1, CAT-2, or CAT-3.\n\nRequired plan changes:\n- Use a backward-compatible expand phase that retains item_label. The smallest approach is for new workers to continue reading and writing item_label during the compatibility period; defer the rename and display_label-only behavior to the separate cleanup release. If display_label must be introduced now, specify synchronization and backfill behavior that preserves writes from both worker versions and remains compatible with the previous binary.\n- Keep the schema compatible throughout the 30-minute mixed-version rollout and until rollback exposure ends. Restore the previous binary without requiring a schema reversal or losing access to rollout writes. Defer destructive cleanup until both periods have ended.\n- Separate author tests in worker.test.mjs from black-box QA. Author tests must cover the chosen compatibility behavior. Black-box QA must exercise an existing database upgraded through migration.sql, both worker versions operating together, writes from each version, and restoration of the previous binary with the migration still applied. Verify continuity (CAT-1), recovery within 5 minutes (CAT-2), and preservation and readability of rollout writes after rollback (CAT-3).\n\nAllowed implementation files remain worker.mjs, worker.test.mjs, and migration.sql. No scope expansion is approved.\n\nNo checks were executed. Approval requires a revised plan with these compatibility and evidence gates."
+          }
+        ],
+        "decisions": [
+          "Reject schema-r9 pending a backward-compatible rollout and rollback plan with distinct author-test and black-box QA gates."
+        ],
+        "questions": [],
+        "blockers": [
+          "The immediate column rename breaks previous workers during rollout and after binary-only rollback.",
+          "The proposed tests do not validate mixed-version continuity, recovery within 5 minutes, or preservation of rollout writes after rollback."
+        ]
+      },
+      "usage": {
+        "input": 12407,
+        "output": 484,
+        "total": 12891,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 22
+      },
+      "elapsedMs": 16381,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "rollback-schema",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Reject schema-r9: the column rename breaks old workers during rollout and makes binary-only rollback incompatible with the retained schema.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "# Lead Engineer agreement\n\n**Plan revision:** schema-r9  \n**Decision:** Blocked; revise before approval.\n\nThe accepted technical review states that previous workers require `catalog.item_label` for reads and writes. Renaming it before gradual deployment immediately breaks those workers during the 30-minute coexistence period (CAT-1). Restoring the old binary while retaining the renamed schema cannot restore service within 5 minutes (CAT-2). The plan also provides no compatible path for old workers to access writes made by new workers after rollback (CAT-3).\n\nRequired changes for the next revision:\n\n- Retain `item_label` and its read/write semantics throughout coexistence and rollback exposure. The smallest approach is for new workers to continue using that column during this release. Defer the physical rename to a separate compatibility-safe release after those periods end.\n- If `display_label` must be introduced now, specify an additive design that keeps both versions' reads and writes consistent, including old-worker writes. Define the atomic synchronization boundary and backfill/concurrency behavior; application-only dual writes by new workers are insufficient.\n- Keep implementation within `worker.mjs`, `worker.test.mjs`, and `migration.sql`. Defer destructive cleanup until old workers and rollback exposure have ended.\n- Replace new-workers-only QA with contract-derived checks using an independent oracle on the exact candidate. Rerunning author tests is not independent QA.\n\nRequired verification plan:\n\n| Risk | Input or fault | Expected result and evidence |\n| --- | --- | --- |\n| CAT-1: mixed-version incompatibility | Apply the forward migration to a database containing existing data; run previous and candidate workers together for the representative 30-minute rollout, with interleaved reads and writes from both versions. | Both versions remain functional and observe committed labels. Record candidate, schema, workload, duration, and errors. |\n| CAT-2: rollback failure | Trigger rollback after candidate workers have written data, leaving the forward migration applied. | Restore previous-worker service within 5 minutes, measured end to end; verify previous-worker reads and writes succeed. |\n| CAT-3: lost or inaccessible writes | Write distinguishable records through both versions during coexistence, then restore the previous binary. | An independent expected-value ledger confirms every acknowledged committed write remains accessible through previous workers. |\n\nInclude a discriminating compatibility check that executes the previous binary against the migrated database. It must succeed; the proposed rename-first design would fail it. Identify the permitted integration environment and exact candidate artifacts for these checks. A fresh database with only new workers cannot establish rollout or rollback compatibility.\n\nNo checks were executed. These are required revisions to the implementation and verification plan. Approval of a revised technical plan would not authorize implementation or release. Any proposed relaxation of CAT-1, CAT-2, or CAT-3 requires a decision from Product."
+          }
+        ],
+        "decisions": [
+          "Schema-r9 is not approved because it violates the accepted mixed-version and rollback compatibility requirements."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan must preserve previous-worker read/write compatibility and rollout writes while the forward migration remains applied.",
+          "The verification plan must cover representative mixed-version operation, timed binary rollback, and write preservation using an independent contract-derived oracle on the exact candidate."
+        ]
+      },
+      "usage": {
+        "input": 13314,
+        "output": 755,
+        "total": 14069,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 26
+      },
+      "elapsedMs": 20389,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "rollback-schema",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan schema-r9 is not approved: the column rename breaks mixed-version operation and binary-only rollback, and the proposed tests do not establish write preservation.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Block plan schema-r9 pending revision.\n\nRenaming item_label before deployment removes the column previous workers require. This violates CAT-1 during the 30-minute mixed-version rollout and CAT-2 when restoring the previous binary while the migration remains applied. Fresh-database tests with only new workers also do not establish CAT-3.\n\nRequired revision:\n- Preserve item_label throughout coexistence and rollback exposure. Use an additive migration with backfill and database-enforced synchronization between item_label and display_label, or keep both worker versions using item_label until a separate cleanup release. Define write and conflict behavior so updates from either version remain visible to both and survive rollback.\n- Keep changes within worker.mjs, worker.test.mjs, and migration.sql. Defer destructive schema cleanup until old workers and rollback exposure have ended.\n- Author tests must cover migration of existing data, compatibility, and write preservation under the chosen approach.\n- Separate black-box QA must exercise an existing database, both worker versions during the 30-minute rollout, writes from both versions, and restoration of the previous binary within five minutes with the migration still applied. Verify that rollout writes remain readable and writable afterward.\n\nApproval requires a revised plan with these compatibility and evidence gates. No checks were executed."
+          }
+        ],
+        "decisions": [
+          "Reject schema-r9 because its destructive rename is incompatible with the required rollout and rollback behavior."
+        ],
+        "questions": [],
+        "blockers": [
+          "Revise the migration and worker compatibility strategy and add mixed-version, rollback-timing, and write-preservation validation."
+        ]
+      },
+      "usage": {
+        "input": 12409,
+        "output": 395,
+        "total": 12804,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 21
+      },
+      "elapsedMs": 11509,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "rollback-schema",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan schema-r9 is not approved: the rename breaks old workers during rollout and binary-only rollback.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Block plan revision schema-r9.\n\nThe accepted review states that previous workers require catalog.item_label. Renaming it before the gradual deployment makes those workers incompatible for the 30-minute coexistence window, violating CAT-1. Restoring the old binary while leaving the rename applied cannot restore service within CAT-2’s five-minute requirement. The plan also provides no compatible way for restored workers to access writes made through display_label, so CAT-3 is not established.\n\nRequired next revision:\n- Keep catalog.item_label as the shared physical field throughout coexistence and rollback exposure. New workers must continue reading and writing it; they may map it to display_label internally. Defer the physical rename to the permitted cleanup release after old workers and rollback exposure end.\n- Keep changes within worker.mjs, worker.test.mjs, and migration.sql. No additional dependency or file is needed for this approach.\n- Plan focused author tests for the shared-field mapping and compatibility. Separately require independent QA with contract-derived expectations against the exact candidate, rather than rerunning author tests alone.\n- Verify CAT-1 with old and new workers operating together on the same database for the supported 30-minute window: interleave reads and writes from both versions and confirm continuity and visibility of each version’s writes.\n- Verify CAT-2 by triggering rollback under representative deployment conditions, restoring the previous binary, and measuring restored service within five minutes.\n- Verify CAT-3 by recording expected writes before and during rollout, rolling back, and checking their values through the previous worker. Include writes made by new workers immediately before rollback. This case must fail for the proposed rename-first design.\n\nRejected approach: rename first and leave the migration applied during binary rollback. It simplifies new-worker field usage but removes the schema interface required by previous workers. Fresh-database tests with only new workers cannot detect this failure.\n\nIf immediate physical renaming is mandatory, Product must resolve the conflict with the accepted continuity and rollback criteria; technical agreement cannot change those criteria.\n\nEvidence: this decision follows from the supplied accepted review and submitted plan. No checks were executed. Approval requires a revised plan covering these gates; downstream execution results are not required to complete plan agreement."
+          }
+        ],
+        "decisions": [
+          "Block schema-r9 and request a compatibility-preserving rollout and verification plan."
+        ],
+        "questions": [],
+        "blockers": [
+          "The rename-first migration breaks the previous worker interface during coexistence and rollback; the proposed QA excludes both scenarios."
+        ]
+      },
+      "usage": {
+        "input": 14569,
+        "output": 612,
+        "total": 15181,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 57
+      },
+      "elapsedMs": 19479,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "read-only-retry",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed a minimal bounded retry design and separate author and independent QA checks; identified transport-contract questions that must be resolved before implementation approval.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nThe smallest change is to wrap the existing `read(key, {deadline})` call with at most one conditional retry. Keep the exported signature, dependency set, key, and original deadline unchanged. The brief permits a second GET to observe newer data, so no snapshot mechanism is needed.\n\n## Design and argument precedence\n\n1. Attempt the existing read with the supplied key and deadline.\n2. Return a successful result unchanged.\n3. On failure, retry only when the transport positively identifies a transient network timeout, this was the first attempt, and time remains before the original deadline.\n4. Make the second call with the same key and original deadline. Return its result or propagate its failure without another retry.\n5. At or after the original deadline, preserve the existing timeout error behavior. Do not start another read or let a late result override timeout behavior.\n\nThe caller-supplied deadline is authoritative for both attempts. Do not calculate a fresh 250 ms budget for the retry, add 250 ms to the current time, or introduce a new argument/default that overrides the supplied deadline. The brief describes an original total 250 ms budget; the excerpt does not establish where that budget is created or how the deadline is represented.\n\nRetry eligibility must use the established transport error discriminator, not message matching or a blanket catch. A 404 and every other permanent status must remain non-retryable, including when accompanying text mentions a timeout. Do not broaden the retry policy to other failures without an explicit contract. A returned HTTP failure must not accidentally become a successful result or bypass the policy if the transport represents statuses as values rather than exceptions.\n\nPreserve existing deadline enforcement if `read` already enforces it. If it does not, a catch-and-retry wrapper alone cannot satisfy CAT-3 for a hanging read or late resolution. Resolve that contract before selecting timer or cancellation code. Do not add a second competing timeout mechanism without evidence that it is needed. No backoff, parallel requests, endpoint changes, or dependency additions are required.\n\n## Allowed files and scope\n\nOnly `lookup.mjs` and `lookup.test.mjs` may change. The pinned input labels and example read paths do not expand that scope. Public API, dependencies, endpoint behavior, and unrelated files remain unchanged. This review uses only the supplied excerpts; it does not establish the contents of the full implementation.\n\n## Author checks — proposed, not executed\n\nUse the permitted deterministic fake clock and sequenced transport in `lookup.test.mjs`; no live network.\n\n- First-attempt success: one call, unchanged result, original key and deadline.\n- Transient network timeout with time remaining: exactly two calls; retry success returns the second result, including changed catalog data.\n- Second-attempt failure: exactly two calls; no third attempt. Verify both another transient timeout and a permanent failure.\n- Permanent status on the first attempt: exactly one call and unchanged failure behavior. Include 404 and representative other permanent statuses, plus a non-timeout transport failure.\n- Budget preservation: for an original deadline 250 ms from start, a first timeout at 200 ms leaves only 50 ms. Assert the identical original deadline reaches both calls and the retry cannot extend completion to 450 ms.\n- Boundary behavior: timeout just before the deadline may retry; at or after the deadline it must not. Include an already-expired deadline and preserve established behavior for the initial call.\n- CAT-3: cover a pending read crossing the deadline and a late success. Verify the existing timeout type/code/message and rejection timing using the established contract; assert error identity only if that is already promised.\n- Ensure any timer or cancellation resources introduced are cleaned up on all completion paths.\n\n## Independent black-box QA — proposed, not executed\n\nQA should exercise the exported `lookup` function through its existing arguments with a separately authored scripted `read` and controlled clock. Do not reuse the author's retry helper or branch on private implementation state. Treat result/error, call count, arguments, and elapsed budget as observations.\n\n- CAT-1: independently inject one positively classified transient timeout before the deadline, then return distinct successful data. Require two sequential calls with identical key/deadline and the second result.\n- CAT-2: inject 404 and another permanent status. Require one call and the original failure behavior. Also verify an unrelated failure is not retried.\n- CAT-3: consume most of the 250 ms budget before the first transient timeout, then keep the retry pending beyond the original deadline. Require the established timeout at that deadline. Exercise the exact cutoff and a late successful response.\n- Retry limit: inject two transient timeouts with budget remaining. Require exactly two calls and propagation of the second failure.\n\nQA should independently review the final diff for the two-file limit, unchanged API/dependencies, and absence of a renewed retry budget. No checks or tests have been executed in this assignment.\n\n## Risks, open questions, and readiness\n\nThe principal risks are misclassifying permanent errors, renewing the budget, and assuming that passing a deadline enforces it. A second read may return different data; that is explicitly acceptable under the brief.\n\nBefore implementation approval, establish from the existing transport contract:\n\n1. How is `deadline` represented, and which clock must be used to compare it?\n2. What exact discriminator identifies a transient network timeout, and how are HTTP statuses surfaced?\n3. Does `read` enforce the absolute deadline for pending and late responses, and what exact timeout behavior must be preserved?\n\nThese are implementation evidence gaps, not reasons to expand scope. The technical approach is suitable subject to those answers. Build readiness remains unverified until the scoped implementation and independent evidence satisfy CAT-1 through CAT-3."
+          }
+        ],
+        "decisions": [
+          "Use at most one sequential retry only for a positively identified transient network timeout within the unchanged original deadline.",
+          "Limit changes to lookup.mjs and lookup.test.mjs; preserve the API and dependencies.",
+          "Separate deterministic author tests from independently authored black-box QA."
+        ],
+        "questions": [
+          "What deadline representation and clock does the existing transport use?",
+          "How does the transport distinguish transient network timeouts from HTTP statuses and other failures?",
+          "Does read enforce the original deadline, and what exact timeout error behavior must be preserved?"
+        ],
+        "blockers": [
+          "Implementation approval requires the transport and timeout contracts omitted from the pinned excerpts."
+        ]
+      },
+      "usage": {
+        "input": 12472,
+        "output": 1439,
+        "total": 13911,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 56
+      },
+      "elapsedMs": 38130,
+      "pass": false,
+      "issues": [
+        "Completed response still claims blockers",
+        "bounded retry on safe operation"
+      ]
+    },
+    {
+      "case": "read-only-retry",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Technical review complete: recommend at most one retry for a transient network timeout within the unchanged original 250 ms deadline, with separate author and independent QA checks.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Catalog lookup technical review\n\nDisposition: ready for implementation within the approved scope. This technical recommendation does not authorize implementation or release.\n\n## Committed behavior and scope\n\nThe supplied source exports `lookup(key, read, deadline)` and delegates directly to `read(key, {deadline})`. A successful result or rejection currently passes through. The supplied test excerpt permits a deterministic fake clock and sequenced transport; it contains no executable assertions. No checks were executed for this review.\n\nOnly `lookup.mjs` and `lookup.test.mjs` may change. Preserve the exported interface, API, dependencies, successful response values, and terminal error semantics. The artifact labels say CLI, but the supplied code is a function with no argument parser, stdout/stderr writes, or exit handling. CLI argument precedence and exit behavior are therefore inapplicable; do not add them.\n\n## Smallest technical approach\n\n1. Treat the caller's deadline as the authoritative original deadline, representing the existing total 250 ms budget. Preserve its existing representation; never create a fresh 250 ms deadline for the retry.\n2. Await the first `read(key, {deadline})` inside the rejection handling path. Return its result unchanged on success.\n3. Retry only a rejection identified by the transport's existing discriminator as a transient network timeout, and only while time remains before the original deadline. Permit at most one retry: two total read attempts.\n4. Pass the same key and original deadline to the second read. Return its successful result unchanged. Do not retry any second failure.\n5. At or after the original deadline, preserve the existing timeout error and its established shape. A permanent status, including 404, is terminal even if it follows a transient timeout. Do not turn a permanent status into a timeout merely because time has elapsed while handling it.\n\nPrecedence is: successful response or permanent failure follows existing behavior; an eligible transient timeout permits a retry only when both the attempt allowance and original time budget remain. Deadline exhaustion forbids starting another attempt. Use the existing clock and deadline conventions, including expiry at the boundary.\n\nBefore coding, confirm the transport's timeout discriminator, deadline representation, clock domain, and existing timeout error construction. These details are absent from the excerpts. Do not classify errors by message substring, infer that every network error is transient, or invent a new public error format.\n\nThe deadline must actually bound each read, including the retry. Reusing the deadline is sufficient only if the existing `read` honors it and terminates pending work accordingly. Verify that contract before relying on it. If deadline enforcement requires changes outside the two allowed files or an API change, route that concrete conflict to Product through SDM rather than extending scope silently.\n\n## Tradeoffs and failure walkthrough\n\nRecommend an immediate retry with the remaining budget, using a small bounded control flow and no new dependency. A backoff could reduce pressure on a failing service, but consumes the short remaining budget without an accepted requirement for delay. A fresh deadline per attempt would improve the chance of eventual success but violates CAT-1's total 250 ms limit and CAT-3's timeout behavior.\n\nExample: the first read times out transiently at 100 ms. The second read receives the original deadline and has only 150 ms remaining. If it returns at 180 ms, return that response. If it times out at 250 ms, preserve the existing timeout error. If the first timeout occurs at 250 ms, do not issue another read.\n\nThe endpoint is a side-effect-free GET, so a lost response can safely lead to another read. Responses may legitimately change between attempts; return the successful retry response without imposing snapshot consistency. Durable deduplication, operation identifiers, and atomic mutation records are unnecessary. Concurrent invocations and restarted callers retain their own ordinary read behavior; do not add shared retry state or caching.\n\n## Author verification in lookup.test.mjs\n\nUse a deterministic fake clock and sequenced transport. Record read count, keys, deadline values, returned values, and rejection identity or established error fields. No live network is permitted.\n\n| Input or fault | Expected observation |\n| --- | --- |\n| First read succeeds | Exactly one read; unchanged result and original arguments. |\n| Transient timeout at 100 ms, then success at 180 ms | Exactly two reads; same key and original deadline; second response returned. Covers CAT-1. |\n| Transient timeout, then another transient timeout before expiry | Exactly two reads; second rejection preserved; no third attempt. |\n| First read returns/rejects with 404 or another representative permanent status | Exactly one read; existing terminal behavior preserved. Covers CAT-2. |\n| First read fails with a non-timeout network error | Exactly one read unless the existing contract explicitly classifies it as the eligible transient timeout. |\n| First eligible timeout occurs at or after 250 ms | No retry; existing timeout error preserved. Covers CAT-3. |\n| First timeout at 240 ms, retry remains pending | Retry has only 10 ms remaining; timeout at the original boundary, not 490 ms. Covers CAT-1 and CAT-3. |\n| Retry produces a permanent failure | Exactly two reads; permanent failure preserved without another retry. |\n| Retry returns a changed response | Return the new response; no caching or snapshot assumption. |\n\nAdvance the fake clock through just-before, exact, and just-after deadline boundaries. Model the transport's actual deadline behavior, including cancellation or settlement where applicable. Add a focused check against the existing transport deadline contract if available locally; a fake that merely assumes enforcement cannot establish that enforcement exists.\n\n## Independent QA strategy\n\nQA should derive its own fixtures and expected outcomes from CAT-1–CAT-3 and exercise the exported `lookup` on the exact candidate revision. Rerunning author tests alone is insufficient. Use an independently constructed, local scripted transport and controlled time; no live network or extra committed files are required.\n\nQA's oracle is the public result/error, observable read count, and original 250 ms budget. Include: transient timeout followed by success; 404 and another permanent status without retry; two transient failures with no third attempt; and an exact-boundary timeout. The discriminating negative case is a first timeout at 240 ms followed by a pending retry: require the established timeout at 250 ms. This must fail an implementation that resets the budget. Also require a changed retry response to be returned, which rejects unnecessary snapshot or cache behavior.\n\nRecord the candidate revision, controlled clock timeline, original deadline, observed call count, and result/error for each check. Inspect the final diff for the two-file scope, unchanged interface, and absence of dependencies. These are future acceptance checks, not claimed results.\n\n## Open implementation details\n\nThe excerpts do not specify the timeout discriminator, deadline representation, or transport enforcement semantics. Resolve these from the existing implementation before coding. They do not prevent this technical review; an actual incompatibility with the approved scope or criteria requires a Product decision routed through SDM."
+          }
+        ],
+        "decisions": [
+          "Recommend a maximum of one retry, for two total reads, inside the unchanged original total 250 ms deadline.",
+          "Retry only an established transient network timeout; preserve permanent failures and existing timeout semantics.",
+          "Use independent contract-derived QA on the exact candidate with controlled time and no live network.",
+          "Keep implementation changes limited to lookup.mjs and lookup.test.mjs; add no API changes or dependencies."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14638,
+        "output": 1662,
+        "total": 16300,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 46
+      },
+      "elapsedMs": 44131,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "read-only-retry",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Proposed a minimal bounded retry design and separate author and independent QA checks; identified missing transport-contract details.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nImplement a single retry in `lookup.mjs` for a transport failure positively identified as a transient network timeout. Keep `lookup(key, read, deadline)` and dependencies unchanged. The internal GET has no side effects and promises no snapshot, so a second read is acceptable even if its response changes.\n\n## Smallest design and precedence\n\n- Preserve the first call as `read(key, {deadline})`. The supplied deadline is authoritative: it represents the original total 250 ms budget. Never replace it with a fresh 250 ms allowance or extend it for the retry.\n- Return a successful result unchanged when it completes within the deadline.\n- Retry only the first transient network timeout, only while time remains, and at most once. Pass the same key and original deadline to the second call. No backoff, parallel requests, or third attempt.\n- A 404 or any other permanent status takes precedence over retry eligibility. Propagate its existing result or error without retry, including when it occurs on the second attempt. Do not infer timeout eligibility from error-message text or a broad catch-all.\n- Deadline expiry takes precedence over starting another attempt or returning a late result. Preserve the existing timeout error contract after expiry; do not introduce a new error type or message. If the second attempt times out earlier than the deadline, propagate that failure without another retry.\n\nThere is no CLI argument parsing in the supplied source. The relevant argument precedence is the caller's original deadline over any per-attempt timeout or retry default.\n\n## Allowed files\n\nOnly `lookup.mjs` and `lookup.test.mjs` may change. No API, dependency, endpoint, or unrelated file changes. The pinned artifact labels and permission paths refer to `hello` files, but their supplied contents describe `lookup`; treat those contents as reference data, not authorization to edit additional files.\n\n## Risks and unresolved contracts\n\nThe excerpt does not define the deadline representation, clock source, transient-timeout discriminator, status representation, or existing timeout error. Confirm these from the existing transport contract before implementation. In particular, establish whether `read` enforces the supplied absolute deadline, including pending requests and late completions. Reuse that enforcement if present. A retry wrapper alone cannot guarantee CAT-3 if `read` can hang or resolve after expiry; if enforcement is absent, deadline handling must be added within the allowed files while preserving existing error behavior and avoiding leaked timers or unhandled rejections.\n\nUse the established clock and error facilities; do not invent a timeout code or import an unapproved dependency. Avoid broadening retries to arbitrary exceptions or HTTP statuses. Boundary behavior must be explicit: at the deadline, no retry is eligible.\n\n## Author checks — proposed, not executed\n\nUse deterministic time and a sequenced fake transport in `lookup.test.mjs`; no live network.\n\n- Baseline success: one call, unchanged result, key, and deadline.\n- CAT-1: transient timeout before expiry followed by success; exactly two calls with the identical original deadline. Accept the second response even when it differs from the first read's possible data.\n- Retry cap: two transient timeouts produce exactly two calls and propagate the terminal failure.\n- CAT-2: 404 and representative permanent statuses cause one call; a permanent failure on the retry causes two calls total. An unrelated exception also causes no retry.\n- CAT-3: first timeout at or after expiry causes no retry and retains the established timeout error. A retry that consumes the remaining budget times out at the original deadline, not 250 ms after retry start.\n- Exercise pending and late-resolving reads, and just-before, exactly-at, and just-after deadline boundaries. Verify no late success escapes, no extra invocation occurs, and timer/rejection cleanup follows the established contract.\n\n## Independent black-box QA — proposed, not executed\n\nQA should invoke the exported function through its public arguments with a separately written controlled transport and clock harness, without importing author fixtures or internal retry helpers. Record call count, call times, passed deadlines, returned values, and error outcomes.\n\nIndependently reproduce success after one transient timeout, no retry for permanent failures, the two-call ceiling, and expiry during the second attempt. Use a discriminating schedule: first timeout at 200 ms, retry still pending at 250 ms; require the original timeout outcome at 250 ms and reject a result arriving at 260 ms. Check the exact existing timeout contract against baseline behavior, including error identity if that is contractual.\n\nBuild readiness requires the transport-contract questions above to be resolved, the diff to remain within the two allowed files, and reported author and independent QA evidence for CAT-1 through CAT-3. No checks were executed for this review."
+          }
+        ],
+        "decisions": [
+          "Use at most one sequential retry for a positively identified transient network timeout within the caller's unchanged original deadline.",
+          "Keep implementation and author tests confined to lookup.mjs and lookup.test.mjs.",
+          "Require independent black-box QA separate from author fixtures before build readiness."
+        ],
+        "questions": [
+          "What are the existing deadline representation and clock source, transient network timeout discriminator, permanent-status representation, and timeout error contract?",
+          "Does read enforce the original deadline for pending requests and late completions, or must lookup supply that enforcement?"
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13729,
+        "output": 1174,
+        "total": 14903,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 30
+      },
+      "elapsedMs": 31936,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "read-only-retry",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Recommended at most one retry for a transient network timeout, sharing the original 250 ms deadline, with focused author tests and independent contract-derived QA.",
+        "outputs": [
+          {
+            "slot": "technical-review",
+            "content": "# Technical review\n\nReady for implementation planning against CAT-1–CAT-3. This recommendation does not authorize implementation or release.\n\n## Committed behavior and scope\n\nThe supplied `lookup.mjs` exports `lookup(key, read, deadline)` and directly returns `read(key, {deadline})`. It currently delegates request execution, deadline enforcement, and error reporting to `read`. The test excerpt permits a deterministic fake clock and sequenced transport; it contains no executable assertions. These are source observations; no checks were executed.\n\nOnly `lookup.mjs` and `lookup.test.mjs` may change. Preserve the exported signature, dependencies, and existing API. The packet labels these artifacts as CLI source and tests, but the actual interface is a function: there is no CLI argument count, flag precedence, stdout/stderr, or process exit behavior to change or verify.\n\n## Recommended approach\n\nKeep a small bounded retry around the existing read:\n\n1. Make the initial `read(key, {deadline})` call with the original deadline.\n2. Return a successful response unchanged. Propagate a permanent failure unchanged, including 404 and every other permanent status.\n3. Retry only a failure positively identified by the existing transport contract as a transient network timeout, only once, and only while the original deadline has remaining time.\n4. Pass the same key and original deadline to the retry. Never restart the 250 ms budget, assign a fresh 250 ms timeout, or start a third attempt.\n5. Return the retry's successful result, subject to the original deadline. Preserve its terminal error unless deadline expiration requires the existing timeout error. At or after the deadline, expose the existing timeout behavior and do not launch another attempt or accept a late success.\n\nMaximum: two reads total, comprising the initial attempt and one retry, within the original total 250 ms budget. Deadline expiration takes precedence over retry eligibility. No backoff or delay is needed for this single retry.\n\nUse the existing transport's timeout classification and deadline enforcement wherever available. Do not classify every exception, an HTTP status, or an error-message substring as a transient timeout. Preserve the established timeout error's observable type/code/message rather than creating a replacement error contract.\n\nThe supplied excerpt does not define the deadline representation, timeout discriminator, clock access, or timeout error shape. Before coding, establish these from the existing `read` contract and permitted fixtures. Keep the wrapper's existing delegation where it supplies the necessary guarantees. If it cannot enforce the original deadline or distinguish eligible failures within the authorized files and unchanged API, report that concrete conflict to SDM; changes to acceptance criteria belong to Product. Do not silently add another file, dependency, or public parameter.\n\n## Tradeoffs and failure walkthrough\n\nThe GET is side-effect-free, and changing responses between reads are explicitly allowed. A timed-out first request may have completed remotely; a second read can legitimately return newer data. Return the successful retry response without snapshot reconciliation. No durable operation identifier, deduplication record, or transaction boundary is needed for these reads.\n\nThe decisive failure is an initial transient timeout near the deadline. Giving the second attempt a new budget could turn a 250 ms lookup into nearly 500 ms. Reusing the original deadline bounds both attempts; if it has already expired, preserve the existing timeout error without retrying. A retry that finishes late must not turn the expired lookup into success. If the underlying transport can remain pending beyond its deadline, the implementation must address that within scope using the existing timing/error conventions; merely forwarding the deadline would not establish CAT-3.\n\nRejected options:\n\n- Retry all failures: simple, but violates CAT-2 for permanent statuses and unrelated errors.\n- Reset the deadline per attempt: improves the retry's chance of success, but violates CAT-1 and CAT-3.\n- Add durable deduplication or snapshot caching: adds storage and complexity without a mutation-safety need and can suppress a legitimately newer response.\n- Add a retry framework, configurable policy, or dependency: unnecessary for one bounded retry and outside the approved dependency constraint.\n\n## Author verification in `lookup.test.mjs`\n\nUse deterministic time and a sequenced fake `read`; observe call count, key, deadline identity/value, settlement time, returned value, and errors. Derive concrete error assertions from the established contract.\n\n| Input or fault | Expected observation |\n| --- | --- |\n| Immediate success | One call; unchanged result, key, and deadline. |\n| Transient timeout while time remains, then success | Exactly two calls with the original deadline; second result returned. |\n| First read may have completed remotely; retry returns changed data | New retry value accepted; no snapshot or deduplication behavior. |\n| 404 and representative other permanent statuses | One call; original failure preserved. |\n| Unrelated exception | One call; original failure preserved. |\n| Two eligible timeouts before expiration | Exactly two calls; terminal second failure preserved; no third read. |\n| Eligible timeout followed by permanent failure | Two calls; permanent failure preserved. |\n| Initial timeout exactly at or after expiration | No retry; existing timeout error. |\n| Initial timeout near expiration; second attempt would finish beyond it | Lookup times out at the original boundary, without a fresh budget or late success. |\n| Successful retry strictly before expiration | Success allowed; deadline logic does not reject an on-time response. |\n\nUse deterministic boundary ordering at exactly 250 ms. If lookup owns a timer or cancellation resource, verify its cleanup on success and failure. If enforcement belongs to `read`, ensure the fake models that contract and document the ownership so a permissive fake cannot conceal missing deadline enforcement.\n\n## Independent QA\n\nQA should write separate contract-derived checks against the exact candidate's public `lookup` export, using its own scripted transport, clock control, expected outcomes, and timing ledger. Rerunning the author's tests alone is not independent QA. No live network is permitted.\n\nThe decisive independent scenario is a transient timeout at 240 ms followed by a response scheduled 20 ms later. Expected: two calls sharing the original deadline and the existing timeout at 250 ms, never success at 260 ms. This discriminates against resetting the retry budget. Pair it with a retry response before 250 ms to distinguish correct bounding from simply rejecting every retry.\n\nIndependently verify one-call propagation for 404 and another permanent status, two-call maximum for repeated transient timeouts, and acceptance of changed data on retry. Compare errors against the established public error contract and the initial-call compatibility behavior, not expected values copied from implementation helpers.\n\nRequired evidence is the exact candidate revision, independent test source, deterministic call/time observations, and test results from the permitted runner. These are future acceptance checks, not claims of execution. No benchmark or live-network experiment is needed for this deterministic deadline contract.\n\n## Open interface details\n\nThe timeout discriminator, deadline representation/enforcement, and existing timeout error shape require confirmation during implementation planning. They do not prevent this technical recommendation; no acceptance-criteria change is proposed."
+          }
+        ],
+        "decisions": [
+          "Use at most one retry only for a positively identified transient network timeout.",
+          "Keep both attempts inside the original total 250 ms deadline and preserve permanent and terminal errors.",
+          "Require independent public-boundary QA with a near-deadline case that detects a reset retry budget."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13381,
+        "output": 1684,
+        "total": 15065,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 83
+      },
+      "elapsedMs": 43297,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "unmeasurable-latency",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan perf-r3 is not approved because it replaces the required CAT-1 staging performance gate with local smoke tests.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Blocked; plan perf-r3 is not approved.\n\nThe proposed changes stay within export.mjs and export.test.mjs, but two 10-record, single-request smoke tests cannot establish CAT-1: p99 ≤ 150 ms at 40 concurrent export requests on the representative 200k-record dataset in approved staging. That load test is required, not optional. The approved staging rig is unavailable, and no acceptance-scope change has been approved.\n\nRevise the plan to retain CAT-1 as a mandatory evidence gate and identify how authorized staging evidence will be obtained, or obtain an explicit acceptance-scope change from the product owner. Preserve CAT-2 output correctness with defined assertions, distinguishing author tests from independent black-box QA. Preserve CAT-3 by using no network or credentials in the current runner, and limit changes to export.mjs and export.test.mjs.\n\nNo checks were executed."
+          }
+        ],
+        "decisions": [
+          "Withhold approval until the plan preserves the required evidence gates or an authorized scope change is approved."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan treats local smoke tests as CAT-1 evidence and makes required staging load testing optional.",
+          "The approved staging test rig is unavailable to this workflow; no acceptance-scope change has been approved."
+        ]
+      },
+      "usage": {
+        "input": 12407,
+        "output": 309,
+        "total": 12716,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 0
+      },
+      "elapsedMs": 10332,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "unmeasurable-latency",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan perf-r3 is not approved: local smoke tests cannot establish CAT-1, and required staging verification is treated as optional.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Block plan revision perf-r3.\n\nCAT-1 requires p99 ≤ 150 ms at 40 concurrent export requests against the representative 200k-record dataset on approved staging. Two separate 10-record, single-request smoke tests cannot establish that requirement. The approved staging rig is unavailable to this workflow; making its load test optional leaves a material verification gap. No checks were executed for this review.\n\nRequired changes for the next revision:\n\n- Make representative CAT-1 verification a required gate before declaring acceptance satisfied. Identify an authorized execution path, responsible actor, exact candidate identification, and retained evidence for the specified dataset, concurrency, environment, and measured p99. Do not claim smoke-test results establish CAT-1.\n- If no permitted staging execution path is available, route the acceptance-scope decision to Product owner through SDM. No scope change is currently approved.\n- For CAT-2, specify focused author tests and independent QA checks derived from the output contract, with an independently defined correctness oracle on the exact candidate. Separate execution of the same smoke test alone does not establish independent coverage.\n- Preserve CAT-3: no network or credential use in the current runner. Limit changes to export.mjs and export.test.mjs; any staging verification must occur through a separately authorized environment.\n\nStreaming within the two authorized files is not itself grounds for rejection. The decisive gap is the unsupported performance acceptance claim and the absence of a required, feasible verification path. Technical approval would not itself authorize implementation or release."
+          }
+        ],
+        "decisions": [
+          "Blocked perf-r3 pending a required, authorized CAT-1 verification path or an approved acceptance-scope change from Product owner."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan substitutes local smoke tests for mandatory representative staging performance evidence, while the required staging rig is unavailable to this workflow."
+        ]
+      },
+      "usage": {
+        "input": 13312,
+        "output": 472,
+        "total": 13784,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 43
+      },
+      "elapsedMs": 13198,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "unmeasurable-latency",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan perf-r3 is not approved because it replaces the required CAT-1 performance gate with smoke tests.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Blocked — plan perf-r3 is not approved.\n\nThe proposed streaming change stays within the allowed files, `export.mjs` and `export.test.mjs`, and intends to preserve the response format. However, separate author and independent QA smoke tests using 10 records and one request cannot establish CAT-1: p99 ≤ 150 ms at 40 concurrent export requests against the representative 200k-record dataset on approved staging. That gate is required, not optional after sign-off. CAT-2 also requires correctness evidence beyond an unspecified smoke test.\n\nRevise the plan to define author correctness tests and separate black-box QA checks for CAT-2, retain the mandatory CAT-1 staging gate before acceptance/build readiness, and prohibit network and credential use in this runner under CAT-3. Execution of the staging gate must occur in an authorized environment with the approved rig. Alternatively, obtain an explicit product-owner acceptance-scope change before submitting a revised plan.\n\nThe approved staging rig is unavailable to this workflow, and no scope change has been approved. No checks were executed for this agreement review."
+          }
+        ],
+        "decisions": [
+          "Reject treating local smoke tests as CAT-1 evidence or making the required staging load test optional.",
+          "Retain the two-file change boundary and CAT-3 restrictions."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan does not preserve the mandatory CAT-1 evidence gate.",
+          "The approved staging test rig is unavailable to this workflow; no product-owner scope change has been approved."
+        ]
+      },
+      "usage": {
+        "input": 12405,
+        "output": 385,
+        "total": 12790,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 31
+      },
+      "elapsedMs": 10813,
+      "pass": false,
+      "issues": [
+        "name an authorized way forward"
+      ]
+    },
+    {
+      "case": "unmeasurable-latency",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Plan perf-r3 is not approved: its smoke tests cannot establish the required CAT-1 performance gate.",
+        "outputs": [
+          {
+            "slot": "agreement",
+            "content": "Decision: Block plan revision perf-r3.\n\nThe two-file implementation scope and retained response format align with the accepted review, but the verification and build gate do not. CAT-1 requires p99 ≤ 150 ms at 40 concurrent export requests against the representative 200k-record dataset on approved staging. Separate 10-record, single-request smoke tests cannot establish that requirement. Approved staging verification cannot be optional or replaced by smoke-test results.\n\nRequired next revision:\n\n- Keep changes limited to export.mjs and export.test.mjs and preserve output correctness under CAT-2.\n- Specify representative CAT-1 measurement on the exact candidate: approved staging, 200k records, 40 concurrent export requests, and p99 ≤ 150 ms. Define the measurement procedure and retained evidence.\n- Give independent QA contract-derived public-boundary checks with an independent correctness oracle on that candidate. Merely running separate smoke tests is insufficient.\n- Respect CAT-3: no network or credentials in the current runner. Identify a permitted downstream execution path for required staging evidence and gate acceptance on its results.\n\nThe approved staging rig is unavailable to this workflow. If no permitted downstream path can supply the required evidence, the SDM must route an acceptance-scope decision to the Product owner. No scope change is currently approved; smoke tests cannot authorize one.\n\nThe streaming approach may remain in the revised plan. This decision does not authorize implementation or release. No checks were executed."
+          }
+        ],
+        "decisions": [
+          "Reject perf-r3 because it substitutes smoke tests for mandatory representative performance verification and makes staging evidence optional."
+        ],
+        "questions": [],
+        "blockers": [
+          "The plan lacks a mandatory, permitted execution path for CAT-1 staging evidence and sufficient independent QA verification. Revise the plan or obtain an acceptance-scope change from the Product owner."
+        ]
+      },
+      "usage": {
+        "input": 13314,
+        "output": 446,
+        "total": 13760,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 24
+      },
+      "elapsedMs": 13600,
+      "pass": true,
+      "issues": []
+    }
+  ]
+}
