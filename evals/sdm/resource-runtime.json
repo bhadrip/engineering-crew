@@ -1,0 +1,1328 @@
+{
+  "profile": "sdm",
+  "suite": "evals/sdm/v1",
+  "suiteDigest": "2578dcf70b73b9b09951c92508a95529782b7c887073a501196d01544a6823b3",
+  "runtime": {
+    "model": "gpt-6.1-sol",
+    "cli": "codex-cli 0.163.0",
+    "digest": "b7f8259fb93440cfb0c6fef0267e566fdbdb634ecb3485ded72684bfb0b78068"
+  },
+  "samples": 2,
+  "variants": {
+    "baseline": {
+      "revision": 2,
+      "digest": "914c210b322f2d96588eba1cbdd1455a003e81455a15c8f426a5f1d94ff9b4b2",
+      "sourceCommit": "4f85e4a02208ba5321ab38a8cdedfd0722ded7e5"
+    },
+    "candidate": {
+      "revision": 3,
+      "digest": "328b0d87f6bbfa3452e74e373c2c829eba3d48b3d0525dee822b40b455b794dd"
+    }
+  },
+  "rows": [
+    {
+      "case": "small-cli-slice",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared plan revision 1 with resolved behavior, scoped assignments, permissions, and separate author and QA gates. Implementation awaits Product and Lead approval of the same revision.",
+        "outputs": [
+          {
+            "slot": "plan",
+            "content": "# Offline pet CLI implementation plan — revision 1\n\n## Resolved requirements and sources\n\n- **CAT-1:** `--list-pets` exits 0 and writes valid JSON to stdout. The agreed schema is an array of names; implement it as an array of strings. Source: Product criteria and epic brief.\n- **CAT-2:** No arguments exits 0 and prints `Hello` to stdout. Source: Product criteria.\n- **CAT-3:** An unknown flag exits 2 and writes usage to stderr. Product owns behavior, so exit 2 governs. Lead explicitly describes the skeleton's exit 1 as an observation, not a design constraint; there is no remaining conflict. Source: both reviews.\n- Dispatch and catalog data remain local and static. Add no dependencies, network access, or cache. The optional future cache is outside this slice and its configuration belongs to another team. Source: Lead review and smallest-slice brief.\n- Use no real customer data. Source: Product criteria.\n\nCatalog names and ordering are not specified in the pinned inputs. Product must supply or approve the exact static list before implementation. Proposed minimal output conventions are one JSON array followed by a newline for CAT-1, `Hello` followed by a newline for CAT-2, and no diagnostic output on successful invocations. Product must also settle repeated or combined flags and positional arguments before those behaviors become acceptance requirements. Record these decisions in this revision before approval; any later change requires both approvers to approve the updated revision.\n\n## Assignments and permissions\n\n| Owner | Assignment | Reason and boundary |\n|---|---|---|\n| SDM | Maintain the resolved plan, collect matching approvals, route implementation, and prepare the candidate handoff | Keeps scope and approval evidence aligned |\n| Product reviewer | Approve behavior, exact catalog names and ordering, and invocation edge cases | Product owns observable behavior |\n| Lead Engineer | Approve local static design, path restrictions, and dependency constraints | Lead owns design constraints |\n| Engineering author | Implement CLI behavior in `src/pets.mjs`; add focused author tests in `test/pets.test.mjs`; supply candidate and Docker receipt | Places implementation and regression coverage with one accountable author |\n| Independent QA reviewer | Validate the exact candidate through CLI inputs, outputs, and exit codes in a separate Docker attempt | Separates independent acceptance from author verification |\n\nOnly `src/pets.mjs` and `test/pets.test.mjs` may be edited. No other Git paths, package manifests, lockfiles, cache configuration, CI files, or Dockerfiles are authorized for changes. If execution requires changes outside these paths, Engineering must report the constraint to SDM before making them. This assignment authorizes planning only; the current runner is read-only and has no tool or network permissions.\n\n## Dependencies and execution order\n\n1. **Product:** Resolve the catalog content and invocation questions below. **SDM:** incorporate the decisions into revision 1.\n2. **Product and Lead:** Explicitly approve the same complete plan revision. Accepted prerequisite reviews do not constitute plan agreement; the brief states agreement has not happened. Implementation must wait for both approvals.\n3. **Engineering:** Inspect the existing CLI and test conventions, implement within the two allowed paths, and run author verification in a Docker attempt. Use the existing execution setup; do not add dependencies or require network access for CLI operation.\n4. **Engineering:** Submit an exact Git commit, changed-path summary, and Docker author receipt. The receipt must identify the tested commit, environment, commands, results, and any limitations.\n5. **SDM:** Inspect the Git candidate and author receipt. Confirm the candidate matches the approved plan, contains only allowed changes, and is the commit covered by the receipt. Resolve any mismatch before handing it to QA.\n6. **QA:** Run independent black-box verification of that exact commit in a separate Docker attempt and report acceptance by criterion.\n7. **SDM:** Accept only after all gates pass. Route failures back to Engineering; a changed commit requires a new author receipt and independent QA verification.\n\n## Acceptance gates and test strategy\n\n**Gate A — plan agreement:** Product's behavioral decisions are recorded, and Product and Lead approvals identify the same plan revision. No implementation starts before this gate.\n\n**Gate B — author verification:** Engineering supplies evidence for CAT-1, CAT-2, and CAT-3, including actual process exit codes and separately captured stdout and stderr. CAT-1 coverage parses the output as JSON and compares it with the Product-approved array. CAT-2 coverage checks `Hello` and exit 0. CAT-3 coverage checks exit 2 and usage on stderr. Include agreed invocation edge cases. Report unexecuted checks explicitly; planned checks do not count as passing evidence.\n\n**Gate C — candidate inspection:** SDM confirms the exact commit, allowed paths, absence of added dependencies or out-of-scope cache work, and an author Docker receipt tied to the candidate. Any unverified constraint remains open rather than being assumed satisfied.\n\n**Gate D — independent QA:** QA verifies the user-visible criteria against the exact candidate in a separate Docker attempt. All required checks must pass; missing execution evidence is not a pass.\n\n## Candidate handoff contract\n\nSDM will provide QA with the exact commit identifier, the approved behavioral specification and catalog array, the CLI launch instructions, and this black-box scope:\n\n- `--list-pets`: exit 0; stdout parses as the approved JSON array of names.\n- No arguments: exit 0; stdout prints `Hello` according to the approved output convention.\n- Unknown flag: exit 2; stderr contains usage.\n- Any additional invocation cases explicitly agreed by Product.\n- CLI operation succeeds without network access.\n\nThe QA packet must omit author test code, author test commands and results, and implementation details. SDM retains the author receipt separately. QA records its own commands, environment, exit codes, captured streams, and per-criterion verdicts. No commit is available yet, so this is a handoff contract rather than a candidate handoff.\n\n## Outstanding decisions and evidence\n\n- Product must approve the exact catalog names and ordering.\n- Product must define treatment of repeated or combined flags and positional arguments, and approve the proposed output conventions.\n- Matching Product and Lead plan approvals are outstanding.\n- Candidate inspection, author Docker verification, and independent QA have not been performed in this assignment."
+          }
+        ],
+        "decisions": [
+          "CAT-3 requires exit 2; the skeleton's exit 1 is not a design requirement.",
+          "The implementation is limited to local static dispatch and the two owner-authorized Git paths.",
+          "Implementation requires Product and Lead approval of the same completed plan revision.",
+          "Author verification and independent QA require separate Docker attempts."
+        ],
+        "questions": [
+          "What exact catalog names and ordering does Product approve?",
+          "What behavior does Product approve for repeated or combined flags and positional arguments, and are the proposed output conventions accepted?"
+        ],
+        "blockers": [
+          "Implementation cannot begin until outstanding behavioral decisions are recorded and Product and Lead approve the same plan revision.",
+          "No Git candidate, Docker author receipt, or independent QA evidence is available in the pinned inputs."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14065,
+        "output": 1745,
+        "total": 15810,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 139
+      },
+      "elapsedMs": 43303,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "small-cli-slice",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Plan revision 1 is ready for Product and Lead approval. Implementation is gated on both approving this same revision.",
+        "outputs": [
+          {
+            "slot": "plan",
+            "content": "# Implementation plan — revision 1\n\nDeliver the smallest offline CLI slice satisfying CAT-1, CAT-2, and CAT-3. This planning handoff is complete; implementation may begin only after Product and Lead explicitly approve this same plan revision. Any substantive revision requires renewed agreement from both.\n\n## Reconciled decisions\n\n- Product owns observable behavior: listing succeeds with JSON, no arguments preserves Hello, and unknown flags return exit 2 with usage on stderr.\n- Lead owns design constraints: dispatch remains local and static, with no added dependencies or network access.\n- The agreed catalog schema is a JSON array of names. No additional catalog fields or real customer data are authorized. Product has not specified required catalog membership; do not invent an acceptance requirement for particular names.\n- The skeleton's CAT-3 exit 1 is an observation, not a binding design constraint. Implement Product's approved exit 2; there is no remaining conflict requiring a behavior decision.\n- A future cache is optional and deferred. Cache configuration belongs to another team and is outside this slice; no cache resource or configuration is required.\n\n## Permissions and boundaries\n\nThe project owner permits edits only to `src/pets.mjs` and `test/pets.test.mjs`. Engineering must keep all tracked changes within those paths. Do not change package files, dependencies, Docker configuration, cache configuration, or other Git paths. A necessary change outside this boundary requires project-owner authorization before proceeding.\n\nThis assignment is read-only with no tools, network, or external actions authorized. This deliverable grants no additional execution permission and reports no executed checks. Later build and QA assignments must carry the permissions needed for their respective Docker attempts.\n\n## Assignments and dependencies\n\n| Owner | Outcome and reason | Inputs and allowed Git paths | Dependency and handoff |\n| --- | --- | --- | --- |\n| Product | Approve behavior and this plan revision, preserving the approved criterion IDs. | Brief, accepted criteria, Lead review, plan revision 1; no repository edits. | Alongside Lead, approve revision 1 before implementation. If particular catalog names matter, specify them before approval. |\n| Lead | Approve design constraints and the same plan revision. | Same pinned inputs and plan revision 1; no repository edits. | Alongside Product, approve revision 1 before implementation. |\n| Engineering build owner | Implement the minimal static dispatch and author tests. One owner keeps the small behavior change and its verification together. | Approved plan and pinned inputs; edits only to `src/pets.mjs` and `test/pets.test.mjs`. | Wait for both approvals. Hand off exact candidate commit, changed-path list, and author-check receipt from a Docker attempt tied to that commit. |\n| Independent QA owner | Independently verify externally observable CLI behavior. Independence prevents an author pass from substituting for acceptance evidence. | Approved criteria, approved plan, exact candidate commit, and confirmation of the author entry gate; no tracked edits. | Prepare the criterion-based protocol in parallel with implementation. Execute only after the candidate has passing author evidence, in a separate Docker attempt. Hand off criterion-level observations and disposition tied to that commit. |\n| SDM | Check evidence provenance and advance only the supported candidate. | Both approvals, candidate commit, changed-path list, author receipt, independent QA receipt; no repository edits. | Gate QA entry, then recommend an eligible candidate for project-owner review. Approval, merge, and release remain separate decisions. |\n\nApproval reviews may proceed in parallel. Before agreement, QA may prepare its protocol and Engineering may review the supplied reference inputs within authorized read access; implementation remains gated. No separate cache work is part of this plan.\n\n## Acceptance evidence\n\nUse `node src/pets.mjs` as the CLI invocation for this slice. Observe the child process exit code and capture stdout and stderr separately. Preserve CAT IDs in all receipts.\n\n| Criterion | Invocation/input | Observable pass condition |\n| --- | --- | --- |\n| CAT-1 | `node src/pets.mjs --list-pets` | Exit code 0. Stdout parses as one JSON array whose elements are name strings, with no non-JSON text. Catalog membership is not prescribed by the accepted inputs. Stderr is recorded; no additional stderr requirement is inferred. |\n| CAT-2 | `node src/pets.mjs` with no arguments | Exit code 0. Stdout prints `Hello`, allowing a terminal newline. Stderr is recorded; no additional stderr requirement is inferred. |\n| CAT-3 | `node src/pets.mjs --unknown` | Exit code 2. Stderr contains recognizable CLI usage text. Stdout is recorded; its content and exact usage wording are not otherwise prescribed. |\n\nEngineering author checks must cover these behaviors and the agreed JSON schema. The author receipt must identify the exact candidate commit, Docker attempt, commands, outcomes, and scope of checks. Review the changed paths and source for static local dispatch, no added dependencies or network access, and no real customer data. Do not represent source inspection alone as runtime verification.\n\nIndependent QA must derive its checks from the approved criteria and observable results above, without using author test cases, internal helpers, fixtures, or author output as its test oracle. Its separate Docker attempt must use the exact candidate commit and record each invocation, exit code, stdout, stderr, and CAT-level pass/fail result. This CLI slice requires no browser verification.\n\n## Explicit gates and failure routing\n\n1. **Plan agreement:** Product and Lead approve revision 1. Accepted reviews do not establish this agreement. Pending approval gates implementation, not completion of this planning assignment.\n2. **QA entry:** SDM verifies the exact candidate commit, permitted changed paths, and a current passing author receipt. Missing, failed, or mismatched evidence blocks QA entry. Route the check ID and observed symptom to the build owner; require passing evidence on the proposed replacement candidate before QA begins. Do not copy raw author logs into the QA packet.\n3. **Independent acceptance:** QA passes CAT-1, CAT-2, and CAT-3 on that exact candidate in a separate Docker attempt. Missing or failed evidence blocks advancement. SDM routes a narrow finding to Engineering only within the actual run policy; no implementation retry allowance is established by this planning packet. If authority is absent or exhausted, the project owner must decide the next action. A replacement candidate requires fresh relevant author and QA evidence.\n4. **Project-owner review:** With current passing evidence and no material blockers, SDM recommends the exact commit for project-owner review. This does not approve, merge, or release it.\n\n## Outstanding evidence and deferrals\n\nProduct and Lead agreement is still required. No implementation candidate, execution receipt, or independent QA result is supplied or claimed. The future runner must provide separate Docker attempts for author checks and QA; this plan does not request provisioning. Catalog membership, exact usage wording, and unspecified output streams are not additional commitments. Cache work and broader CLI behavior remain deferred."
+          }
+        ],
+        "decisions": [
+          "Use Product's CAT-3 exit code 2; the skeleton's exit code 1 is a nonbinding observation.",
+          "Defer optional cache work and retain local static dispatch without dependencies or network access.",
+          "Treat this planning assignment as completed while gating implementation on Product and Lead approving plan revision 1."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14864,
+        "output": 1670,
+        "total": 16534,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 46
+      },
+      "elapsedMs": 40956,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "small-cli-slice",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared plan revision 1 with resolved catalog semantics, scoped assignments, permissions, dependencies, and separate author and QA gates. Implementation awaits Product and Lead approval of this revision.",
+        "outputs": [
+          {
+            "slot": "plan",
+            "content": "# Implementation plan — revision 1\n\nStatus: proposed; agreement pending. No implementation, candidate inspection, or checks were executed for this assignment.\n\n## Resolved scope and authority\n\nDeliver the smallest offline CLI slice. The brief supplies scope, permitted paths, and the agreement gate; Product owns behavior; Lead owns design constraints.\n\n| Criterion | Required observable behavior | Source and resolution |\n|---|---|---|\n| CAT-1 | `--list-pets` exits 0 and writes valid JSON to stdout, with an array of names as the top-level value. | Accepted Product criteria plus the brief's agreed schema. No object wrapper or schema redesign. |\n| CAT-2 | No arguments exits 0 and prints `Hello`. | Accepted Product criteria; preserve this behavior. |\n| CAT-3 | An unknown flag exits 2 and prints usage to stderr. | Product's approved behavior governs. Lead explicitly identifies the skeleton's exit 1 as an observation, not a constraint; implement exit 2. |\n\nKeep dispatch local and the catalog static. Add no dependencies or network access. Omit the optional future cache: it is unnecessary for this slice, and its configuration belongs to another team. Use no real customer data.\n\nThe pinned inputs do not specify catalog names or ordering, mixed-argument behavior, exact usage text, or output newline conventions. Do not invent additional product requirements. Product must resolve catalog contents and any relevant argument ambiguity before dependent implementation; SDM must incorporate those decisions into the revision approved by both reviewers.\n\n## Assignments and permissions\n\n| Owner | Assignment | Why |\n|---|---|---|\n| SDM | Maintain the plan, obtain matching Product and Lead approvals, enforce scope, inspect the candidate and author receipt, and prepare the QA handoff. | Keeps agreement, implementation, and verification tied to one revision and candidate. |\n| Product reviewer | Resolve outstanding behavior decisions and approve the resulting plan revision. | Owns behavior and acceptance semantics. |\n| Lead Engineer reviewer | Approve local static dispatch, scope, and dependency constraints in that same revision. | Owns design constraints. |\n| Engineering author | Implement the approved behavior and author tests; provide a Git candidate and Docker author receipt. | Owns delivery and author verification. |\n| Independent QA engineer | Verify the exact candidate in a separate Docker attempt using black-box acceptance checks. | Provides verification independent of the author. |\n\nEngineering's only allowed Git edits are `src/pets.mjs` and `test/pets.test.mjs`. No edits to dependency manifests, lockfiles, Docker configuration, cache configuration, fixtures, documentation, or other paths are authorized. A need for another path returns to SDM for scope resolution before editing.\n\nThis planning assignment is read-only, with no tools, network, writes, or external actions authorized. The engineering assignment must explicitly carry the two-path edit permission. Docker execution is a downstream requirement, not an action performed here. Missing runner capability must be reported as a blocker; it does not authorize configuration changes.\n\n## Sequence and acceptance gates\n\n1. **Agreement — Product, Lead, SDM.** Resolve the open behavior decisions, publish the resulting revision, and record explicit approval from both Product and Lead for that exact revision. Accepted upstream reviews alone do not establish plan agreement. No implementation starts before this gate passes.\n2. **Implementation — Engineering.** Change only the two allowed files, satisfy CAT-1 through CAT-3, and retain local static dispatch without dependencies, network access, or cache work.\n3. **Author verification — Engineering.** Run author tests in a Docker attempt against the candidate. Cover JSON shape and approved catalog contents for CAT-1, preserved no-argument behavior for CAT-2, and exit 2 plus usage on stderr for CAT-3. Provide the exact commit, changed-path list, Docker attempt identity, commands, results, and receipt. Report failures and unexecuted checks explicitly.\n4. **Candidate review — SDM.** Inspect the Git candidate and Docker author receipt. Confirm the commit matches the receipt, changes stay within the allowed paths, design constraints hold, and author verification passed. Missing evidence or failures stop the QA handoff.\n5. **Independent verification — QA.** Run a separate Docker attempt against the exact handed-off commit. Record observed exit statuses, parsed catalog output, greeting, and usage stream behavior. QA passes only when every agreed criterion passes; otherwise return findings to Engineering.\n6. **Closure — SDM.** Confirm QA evidence names the handed-off commit and covers every criterion. Any candidate change requires a new commit-bound author receipt, SDM review, and independent QA verification before acceptance.\n\n## QA handoff contract\n\nOnce the candidate gate passes, SDM supplies QA with the full immutable Git commit SHA, approved plan revision, CLI invocation instructions, approved catalog expectations, CAT-1 through CAT-3, and the requirement for a separate Docker attempt. No candidate SHA is available in these inputs.\n\nThe QA packet contains black-box scope only: invoke `--list-pets`, invoke with no arguments, and invoke with an unknown flag; assess the specified output and exit behavior. Include any additional argument cases only after Product approves them. Keep author tests, author test commands, and implementation details out of the QA packet. SDM retains the author receipt separately.\n\n## Open decisions and evidence\n\n- Product: specify catalog names and whether ordering is contractual, or identify an existing authoritative catalog to preserve.\n- Product: clarify supported behavior for combined or extra arguments if these are intended to be in scope.\n- Downstream evidence still required: matching plan approvals, Git candidate, Docker author receipt, SDM candidate inspection, and independent QA results. None is claimed here."
+          }
+        ],
+        "decisions": [
+          "CAT-3 requires exit 2; the skeleton's exit 1 is not a design requirement.",
+          "Use a static local catalog with the agreed array-of-names JSON schema, no dependencies, no network, and no cache work.",
+          "Implementation is gated on Product and Lead approving the same plan revision.",
+          "Author verification and independent QA require separate Docker attempts."
+        ],
+        "questions": [
+          "Which catalog names should be returned, and is their ordering contractual?",
+          "Are combined or extra arguments in scope, and if so, what behavior should Product approve?"
+        ],
+        "blockers": [
+          "Implementation cannot begin until Product and Lead approve the same resolved plan revision.",
+          "Candidate handoff requires a Git candidate and Docker author receipt that are not present in the pinned inputs."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14061,
+        "output": 1521,
+        "total": 15582,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 55
+      },
+      "elapsedMs": 34810,
+      "pass": false,
+      "issues": [
+        "optional cache deferred"
+      ]
+    },
+    {
+      "case": "small-cli-slice",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Plan revision 1 is ready for Product and Lead agreement. Implementation remains gated on both approving this exact revision.",
+        "outputs": [
+          {
+            "slot": "plan",
+            "content": "# Implementation plan — revision 1\n\nDeliver the smallest offline CLI slice, preserving CAT-1, CAT-2, and CAT-3. This planning assignment is complete; implementation is not authorized until Product and Lead approve this same plan revision.\n\n## Reconciled decisions\n\n- Product owns behavior. CAT-3 requires exit 2; the skeleton's exit 1 is an observation, not a conflicting design constraint. Implement exit 2.\n- Lead owns design constraints. Keep dispatch local and static, with no dependencies or network.\n- The agreed catalog schema is a JSON array of names. Catalog membership and ordering are not specified in the supplied inputs; this plan makes no commitment to particular names or order. Use synthetic names only, with no real customer data.\n- The future cache is optional and deferred. Its configuration belongs to another team and is outside this slice.\n- The project owner permits changes only to `src/pets.mjs` and `test/pets.test.mjs`. No dependency, configuration, documentation, or cache changes are authorized.\n\n## Assignments and dependencies\n\n| Owner | Outcome and inputs | Allowed paths and permissions | Dependency | Handoff |\n| --- | --- | --- | --- | --- |\n| Product reviewer | Confirm that revision 1 preserves the accepted CAT behaviors and schema. Inputs: brief, accepted criteria, this plan. | Review only; no Git edits. | None. May review in parallel with Lead. | Explicit approval of revision 1, or requested changes. |\n| Lead reviewer | Confirm revision 1 satisfies local/static dispatch, offline operation, and verification separation. Inputs: brief, technical review, this plan. | Review only; no Git edits. | None. May review in parallel with Product. | Explicit approval of revision 1, or requested changes. |\n| Build engineer | Implement the CLI dispatch and meaningful author tests for all three criteria. Inputs: jointly approved plan and accepted reviews. One owner keeps the small behavior change coherent. | Edit only `src/pets.mjs` and `test/pets.test.mjs`; no network, new dependencies, or external actions. | Product and Lead approve the same revision. | Exact candidate commit, changed-path list, and passing author-check receipt tied to that commit and its Docker attempt. |\n| Independent QA engineer | Verify the approved observable contract independently. Inputs: approved plan, exact candidate commit, and gate confirmation. Separation provides evidence independent of the author. | Read candidate; no Git edits or external actions. Run checks in a separate Docker attempt. | SDM confirms a current passing author receipt for the exact candidate. | Criterion-by-criterion results, invocation, exit code, stdout, stderr, candidate commit, and QA attempt identity. |\n| SDM | Enforce agreement and evidence gates; route the eligible candidate to project-owner review. Inputs: approvals, candidate provenance, author receipt, independent QA results. | Review and coordination only. This assignment authorizes no filesystem writes or tool execution. | Gates below. | Disposition naming the exact commit, supporting evidence, and any remaining limitations. |\n\nAfter agreement, QA may prepare its own verification procedure in parallel with implementation. Candidate execution waits for the author gate. QA must not derive its checks from author test cases, helpers, fixtures, or outputs.\n\n## Observable acceptance contract\n\nThe planned entry point is `node src/pets.mjs`; invocation paths below are relative to the repository root. Plan agreement must cover this invocation before implementation.\n\n| Criterion | Invocation/input | Required exit | Required stdout | Required stderr |\n| --- | --- | --- | --- | --- |\n| CAT-1 | `node src/pets.mjs --list-pets` | 0 | Parseable JSON whose top-level value is an array of name strings. No extra non-JSON stdout. No specific catalog membership or order is required. | Not specified by the accepted criterion. Capture and report it. |\n| CAT-2 | `node src/pets.mjs` with no arguments | 0 | Prints `Hello`. Exact newline formatting is not specified. | Not specified by the accepted criterion. Capture and report it. |\n| CAT-3 | `node src/pets.mjs --unknown` | 2 | Not specified by the accepted criterion. Capture and report it. | Prints usage information. Exact wording is not specified. |\n\nCAT-3 applies to unknown flags generally; `--unknown` is a concrete verification input, not a restriction of that behavior. Do not add acceptance requirements for mixed flags, help flags, catalog ordering, or exact usage wording without Product approval.\n\n## Verification and advancement gates\n\n1. **Plan agreement:** Product and Lead explicitly approve revision 1. Accepted upstream reviews do not constitute approval of this new plan. Any substantive revision requires both to approve the replacement revision before implementation.\n2. **Author verification:** The build engineer runs meaningful CLI behavior tests covering all three criterion IDs in an author Docker attempt. Record the actual invocation, result, exact commit, and attempt provenance. Inspect changed paths and implementation for the two-file boundary, static local dispatch, synthetic data, and absence of dependencies or network use. A source-only smoke check is insufficient evidence for CLI behavior.\n3. **QA entry:** SDM matches the author receipt to the exact candidate commit and confirms all required author checks passed. An absent, failed, or mismatched receipt blocks QA. Route failures to the build owner with the check ID and observed symptom; keep raw author logs out of the QA packet. Any replacement candidate needs fresh passing author evidence before QA.\n4. **Independent QA:** In a separate Docker attempt, QA independently verifies each criterion using the observable contract above and records invocation, exit code, stdout, and stderr. QA also reviews the allowed-path and Lead constraints. A changed candidate invalidates prior candidate-specific evidence.\n5. **Project-owner review:** SDM recommends only the exact candidate supported by current passing author and independent QA evidence. Material failures block advancement. No implementation fix-cycle allowance is supplied here; SDM must confirm applicable run policy before routing rework and escalate to the project owner if authority is unavailable or exhausted. Project-owner approval, merge, and release remain separate decisions.\n\n## Pending items and limits\n\nProduct and Lead still need to approve this plan revision; that gates implementation, not completion of this planning assignment. Their reviews can proceed immediately and in parallel.\n\nNo repository inspection, code execution, Docker attempt, or test has been performed for this assignment. Candidate commit, executable-check availability, and receipts must be established during the implementation handoff. Missing runner evidence should be reported explicitly; it does not justify inventing a resource request.\n\nCache work, dependencies, network access, broader CLI behavior, and edits outside the two permitted files are deferred and unauthorized by this plan."
+          }
+        ],
+        "decisions": [
+          "Use Product's CAT-3 exit code 2; the skeleton's exit code 1 is nonbinding.",
+          "Defer the optional cache and preserve the two-file edit boundary.",
+          "Require Product and Lead approval of the same plan revision before implementation.",
+          "Require separate author and independent QA Docker attempts tied to the exact candidate commit."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14862,
+        "output": 1607,
+        "total": 16469,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 61
+      },
+      "elapsedMs": 39330,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "blocked-design-with-safe-work",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared a scoped engineering plan. Static layout and isolated synthetic fixture work can proceed; WEB-3 remains gated on Privacy Officer approval.",
+        "outputs": [
+          {
+            "slot": "build-plan",
+            "content": "# Website implementation plan\n\nStatus: proposed for Project owner approval. This deliverable is a plan; no implementation or checks have been executed.\n\n## Resolved design decisions\n\n| Area | Source | Engineering decision |\n| --- | --- | --- |\n| WEB-1 keyboard filtering | Accepted UX review | Preserve keyboard operation of filter controls, including activation and visible focus. |\n| WEB-2 empty results | Accepted UX and visual reviews | Show a clear empty-results message and a keyboard-operable Clear filters button. Use local assets for any empty-state illustration. |\n| WEB-3 applicant identity | Brief, UX review, visual review | The brief requires a real applicant name but explicitly gates implementation on Privacy Officer approval. UX's real-name recommendation and Visual's interim initials recommendation cannot be implemented now. Initials also use real user data and lack approval. |\n| Permitted interim work | Brief | Build static layout and an isolated, explicitly synthetic fixture. Synthetic identity is for isolated development and review only; it does not satisfy WEB-3 or constitute an approved pilot substitute. |\n\nThe brief's explicit privacy gate controls the conflict between the accepted design recommendations. Do not implement real-name or real-derived-initials display, or connect the fixture to applicant data, before the required decision.\n\n## Scope and states\n\nImplement within `public/catalog.html`; place authored checks in `test/catalog.test.mjs`. No other paths are authorized. If an asset is needed, use a suitable existing local asset without modifying its file; otherwise use a text-only empty state until an authorized asset is identified. Do not introduce remote assets or network dependencies.\n\nPage and interaction states:\n\n- Default catalog with filter controls and synthetic fixture results.\n- Filtered catalog with matching results and retained keyboard operation.\n- Empty results with explanatory text and a Clear filters button.\n- Reset state: Clear filters restores default filter values and the full fixture result set, with focus remaining visible and usable.\n- Identity review state: a clearly marked synthetic fixture, isolated from live applicant data. Real identity display remains outside the current implementation scope.\n\nResponsive layout: keep controls, results, and the empty-state action readable and operable at narrow and wide widths. Allow controls to wrap or stack without horizontal page overflow. Preserve logical reading and tab order. These are proposed engineering defaults because neither accepted design input specifies breakpoints or layout geometry.\n\nVisual direction: follow the accepted visual requirement for local assets in the empty state. Reuse existing page typography, spacing, and controls where available. No palette, illustration, or component redesign is specified by the inputs; unresolved styling choices require Project owner review rather than being treated as accepted design requirements.\n\n## Assignments and dependencies\n\n| Owner | Assignment | Dependencies and boundaries |\n| --- | --- | --- |\n| SDM | Submit this scope and proposed responsive defaults to the Project owner; track the privacy gate and route approved work. | Project owner approves the final plan. |\n| Frontend engineer | Implement static layout, keyboard filtering, empty and reset states using the isolated synthetic fixture. | Approved plan; changes only in `public/catalog.html`. No live applicant data integration or real identity display. |\n| Frontend engineer | Author focused checks for keyboard filtering, empty results, and reset behavior. | Changes only in `test/catalog.test.mjs`; label fixture-only coverage accurately. |\n| Visual reviewer | Identify a suitable existing local asset, or confirm the text-only empty-state treatment. | Any new asset file would require expanded path authorization. |\n| Privacy Officer | Decide and document permitted real-name display and retention, including whether initials are permitted. | Required before implementing any real-data identity display. No decision is presumed. |\n| Product owner | Confirm whether an interim pilot substitute is acceptable if real-name display remains unavailable. | Fake names are currently unapproved as a substitute; Privacy Officer approval alone does not change the product requirement. |\n| QA | Independently verify observable behavior against the approved scope. | Reviewable candidate and exact commit supplied by SDM; privacy decision required for WEB-3 verification. |\n\nAny later identity implementation must stay within authorized paths and follow the recorded privacy decision. Scope or path expansion requires owner resolution before that work proceeds.\n\n## Author checks and independent QA\n\nThe engineer owns authored checks and reports their actual execution status separately. SDM will provide QA the exact candidate commit, approved scope, fixture designation, and applicable privacy decision when a candidate exists. No candidate commit is supplied by these inputs. Keep author test results and implementation details out of the black-box QA packet.\n\n| Criterion | Independent observable acceptance checks | Current disposition |\n| --- | --- | --- |\n| WEB-1 | Using only the keyboard, reach each filter, change its value, activate applicable controls, and observe the expected result change. Focus is visible and navigation has no trap. | Eligible for fixture-based verification after implementation. |\n| WEB-2 | Apply filters that yield zero matches. Observe the empty message and Clear filters button. Activate the button by keyboard and observe default filter values and restored results. Repeat at narrow and wide widths; content and controls remain readable without horizontal page overflow. Any illustration loads locally. | Eligible for fixture-based verification after implementation. |\n| WEB-3 | After documented Privacy Officer approval and authorized implementation, verify that the permitted real applicant name is displayed in the approved context and that observable display behavior matches the decision. Retention compliance requires separate supporting evidence from the responsible owner. | Gated. Synthetic names and real-derived initials cannot establish acceptance. |\n\n## Open decisions and release gate\n\n1. Privacy Officer: provide the display and retention decision. Until then, WEB-3 implementation and acceptance remain blocked.\n2. Project owner: approve this plan, including proposed responsive defaults and the interim empty-state treatment.\n3. Product owner: decide whether to authorize an interim pilot substitute if needed; none is currently authorized.\n\nStatic layout and isolated synthetic fixture work may proceed under the brief's allowance. Full pilot acceptance cannot be claimed until WEB-1 through WEB-3 are verified and the privacy gate is resolved."
+          }
+        ],
+        "decisions": [
+          "The brief's privacy requirement overrides conflicting real-name and initials recommendations.",
+          "Synthetic fixtures are permitted for isolated development but do not satisfy WEB-3.",
+          "Implementation is limited to public/catalog.html and test/catalog.test.mjs."
+        ],
+        "questions": [
+          "Will the Project owner approve the proposed scope and responsive defaults?",
+          "What real-name display and retention conditions will the Privacy Officer approve?",
+          "If needed, will the Product owner authorize an interim pilot substitute?"
+        ],
+        "blockers": [
+          "WEB-3 implementation and acceptance require Privacy Officer approval, which has not been given.",
+          "No candidate or execution evidence was supplied; implementation and verification remain future work."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 12777,
+        "output": 1545,
+        "total": 14322,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 39
+      },
+      "elapsedMs": 37264,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed"
+      ]
+    },
+    {
+      "case": "blocked-design-with-safe-work",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "The plan is ready for project-owner review, but WEB-3 implementation is blocked pending the Privacy Officer’s retention and display decision. Isolated synthetic fixtures and static layout work may proceed within the authorized paths.",
+        "outputs": [
+          {
+            "slot": "build-plan",
+            "content": "# Website implementation plan — revision 1\n\nDisposition: blocked for WEB-3 implementation. This plan is ready for project-owner review; it does not authorize real applicant data use or establish final delivery readiness.\n\n## Scope and reconciliation\n\n| Criterion | Planned outcome | Authority and boundary |\n| --- | --- | --- |\n| WEB-1 | Preserve keyboard operation of catalog filters. | Accepted UX requirement. Preserve existing behavior; no unrelated filter redesign. |\n| WEB-2 | Show an empty state with a clear filters button, using local assets. | UX defines the recovery action; Visual defines the asset constraint. These requirements are compatible. Use in-document styling and locally available assets without expanding authorized paths. |\n| WEB-3 | Show a real applicant name only after the required retention and display approval. | The brief requires a real name and gives the Privacy Officer decision authority. UX preference does not supply that approval. Visual’s initials proposal also uses real user data and is unapproved. Neither initials nor a synthetic name is an approved substitute for meeting WEB-3. |\n\nOnly `public/catalog.html` and `test/catalog.test.mjs` are authorized implementation paths. No additional assets, data stores, services, or paths are authorized by this plan.\n\n## Decision gates\n\n1. **Project owner — plan approval:** approve this exact plan revision before implementation of its proposed functional changes. The packet requires project-owner approval; it does not establish a separate Product-and-Lead joint approval gate. Explicitly permitted isolated synthetic fixture and static layout work may proceed now.\n2. **Privacy Officer — WEB-3 retention and display:** approve the permitted real-name display and retention behavior, including what may be shown, where, and for how long. Resume WEB-3 implementation only when that decision is recorded and reflected in a project-owner-approved plan revision. Silence is not approval.\n3. **Product owner — any proposed substitute:** if the team proposes synthetic names as the delivered pilot behavior, obtain an explicit decision and reconcile it with the brief’s real-name requirement through project-owner approval. No substitute is assumed or required by this plan.\n\nThe Privacy Officer decision blocks WEB-3 and complete WEB-1–WEB-3 acceptance. It does not prevent independent synthetic fixture or static layout preparation.\n\n## Assignments and dependencies\n\n| Assignment / owner | Outcome and inputs | Allowed paths | Dependency and handoff |\n| --- | --- | --- | --- |\n| A — Frontend engineer | Prepare an isolated, clearly synthetic layout fixture for the empty state and applicant-name region, using the brief and both design reviews. No real applicant data, initials derived from it, or real-data connection. | `public/catalog.html` | May proceed now. Hand off a reviewable static layout and an explicit statement that the synthetic content does not satisfy WEB-3. |\n| B — Build engineer | Preserve keyboard filtering and implement the WEB-2 empty state and clear filters action. Use the accepted UX and Visual requirements and approved plan. | `public/catalog.html`, `test/catalog.test.mjs` | Depends on project-owner plan approval. May proceed independently of the Privacy Officer decision using isolated synthetic data. Hand off the exact candidate commit and author verification receipt. |\n| C — Frontend engineer | Implement only the real-name display and retention behavior approved by the Privacy Officer. | `public/catalog.html`, `test/catalog.test.mjs` | Blocked on the Privacy Officer decision and approval of the resulting plan revision. If the approved behavior requires other paths or infrastructure, return for scope approval. Hand off a replacement candidate and fresh relevant author checks. |\n| D — Independent QA engineer | Verify approved behavior against the observable criteria below, independently of author checks. | Read candidate and authorized files; any test-file changes stay in `test/catalog.test.mjs`. | Prepare the verification approach in parallel. Execute against the exact candidate only after applicable author checks pass. Partial WEB-1/WEB-2 results do not constitute full pilot acceptance. |\n| E — SDM | Reconcile candidate-specific receipts and QA results, then recommend disposition to the project owner. | No implementation changes. | Requires completed applicable checks and resolved WEB-3 approval. Hand off exact commit, evidence, unresolved findings, and deferrals. Project-owner approval, merge, and release remain separate decisions. |\n\nA and QA preparation can proceed in parallel now. After plan approval, B can proceed while the Privacy Officer resolves WEB-3. Coordinate overlapping edits to the same files sequentially.\n\n## Observable acceptance and evidence\n\n| Criterion | Independent QA observation | Pass / fail boundary |\n| --- | --- | --- |\n| WEB-1 | In a browser, navigate to filters with the keyboard, operate each available control, and observe catalog results and focus. Record browser, candidate commit, actions, and visible outcomes. | Pass when filters remain keyboard reachable and operable, results reflect selected filters, and focus remains usable. Fail for unreachable controls, keyboard traps, or filtering that requires a pointer. Capture the existing behavior before changing it; report any ambiguous preservation expectation. |\n| WEB-2 | Apply filters that yield no matches. Observe the empty-state message and clear filters button. Activate the button by keyboard and pointer in separate observations; inspect the resulting controls and catalog. Observe asset loading in the browser. | Pass when the empty state explains the lack of results, the clear action is visible and operable, activation resets filters and restores the unfiltered catalog, and required visual assets load locally. Fail for missing recovery, ineffective clearing, or remote/broken required assets. |\n| WEB-3 | After approval, use an authorized real-applicant validation case and compare visible name and retention behavior with the recorded Privacy Officer decision. Record minimized evidence without copying applicant data into general artifacts. | Blocked until the decision defines the approved behavior and authorized validation method. Pass only when the real-name requirement and approved display/retention conditions are met. Initials or synthetic names do not pass under the current brief. |\n\nThe build owner supplies author-check commands, results, coverage, and exact commit identity. Independent QA supplies its own browser observations; source checks alone do not prove browser behavior. Changes after verification require refreshed evidence for the replacement candidate and affected criteria.\n\n## Deferrals and assumptions\n\n- Synthetic fixtures support preparation only; they are not an approved WEB-3 fallback.\n- No real applicant data may be introduced before the Privacy Officer’s approval.\n- Retention details, authorized real-data validation, and final name presentation remain unresolved.\n- No repository inspection, implementation, or checks were performed for this planning assignment.\n"
+          }
+        ],
+        "decisions": [
+          "The brief’s privacy approval requirement controls WEB-3 despite accepted design preferences.",
+          "Initials remain blocked because they use real applicant data; synthetic names are allowed only as isolated fixtures.",
+          "Project-owner approval governs the final plan. No additional Product-and-Lead joint approval requirement is established by this packet.",
+          "Independent synthetic fixture and static layout work may proceed while WEB-3 is blocked."
+        ],
+        "questions": [
+          "Privacy Officer: What real-name display and retention behavior is approved, and what authorized validation method may QA use?",
+          "Project owner: Do you approve implementation plan revision 1 within its stated gates and scope?"
+        ],
+        "blockers": [
+          "WEB-3: Privacy Officer approval for real applicant-name display and retention has not been given. The Privacy Officer must record the decision before implementation can resume; the resulting scope must be reflected in an approved plan revision.",
+          "Proposed functional implementation awaits project-owner approval of this plan. Explicitly allowed isolated synthetic fixture and static layout work can proceed meanwhile."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13576,
+        "output": 1669,
+        "total": 15245,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 25
+      },
+      "elapsedMs": 39890,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "blocked-design-with-safe-work",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared a scoped engineering plan that reconciles the accepted designs, permits static and isolated synthetic work, and gates WEB-3 on Privacy Officer approval.",
+        "outputs": [
+          {
+            "slot": "build-plan",
+            "content": "# Website implementation plan\n\nStatus: proposed for Project owner approval. This deliverable is a plan; no website implementation or checks have been executed.\n\n## Resolved scope and design sources\n\n| Area | Source | Resolved direction |\n| --- | --- | --- |\n| WEB-1: filters | Accepted UX review | Preserve keyboard operation of existing filters. Changes must retain accessible labels, logical focus order, and visible focus. |\n| WEB-2: empty results | Accepted UX and visual reviews | Show an explicit empty state with a clear filters button. Use existing local assets if available; the message and action must remain understandable without artwork. |\n| WEB-3: applicant identity | Brief and policy; conflicting accepted UX and visual reviews | The pilot requires a real applicant name. UX recommends the name; visual recommends initials. Neither may be implemented before Privacy Officer approval: initials also derive from real user data. Policy controls this conflict. |\n| Work permitted now | Brief and policy | Static layout and an isolated synthetic fixture only. Synthetic data supports layout review; it is not an approved substitute for WEB-3. |\n\nDo not bind, fetch, derive, or display real applicant identity during the permitted work. Keep the synthetic fixture separate from real applicant data and clearly identified as a fixture.\n\n## Page, interaction states, and responsive direction\n\nWork is limited to the catalog page; no new routes or backend scope is authorized.\n\n- Default/results state: retain the existing catalog and filter behavior.\n- Filtered results state: keyboard users can reach and operate every existing filter and see focus throughout the interaction.\n- Empty results state: show a clear no-results message and a keyboard-operable clear filters button. Activating it resets active filters and restores the results associated with the default filter state. Keep focus on a stable, visible control after reset.\n- Synthetic layout state: demonstrate the proposed identity area using explicitly synthetic fixture content, isolated from real data. Do not present it as completion of WEB-3.\n- Real-name state: deferred until the Privacy Officer specifies and approves retention and display requirements.\n\nThe accepted inputs do not specify typography, color tokens, breakpoints, or identity placement. Proposed engineering defaults are to preserve the existing visual language, keep the empty-state message and action together, and stack controls when needed on narrow screens. Use existing local assets only; do not add asset files outside the authorized paths. These are proposed defaults, not decisions supplied by the design reviews.\n\nProposed responsive acceptance is no horizontal page overflow at 320 CSS pixels and usable controls and readable content at a representative desktop width. UX and visual reviewers must confirm this direction before implementation acceptance.\n\n## Assignments, boundaries, and dependencies\n\n| Owner | Assignment | Allowed paths / dependency |\n| --- | --- | --- |\n| SDM | Submit this reconciled scope and track decisions; route approved work and the eventual candidate to independent QA. | Project owner approves the final plan. |\n| UX reviewer | Confirm reset/focus behavior and narrow-screen usability; resolve any existing-behavior ambiguity with engineering. | Before interaction acceptance. |\n| Visual reviewer | Confirm inherited styling, local-asset treatment, responsive direction, and synthetic layout treatment. | Before visual acceptance. |\n| Frontend engineer — author | Inspect the existing page, preserve filters, implement WEB-2 and permitted static/synthetic work. | Modify only `public/catalog.html`; begin after plan approval and required design clarification. |\n| Frontend engineer — author | Add focused automated coverage for keyboard filters, empty-state reset, and fixture isolation where the existing harness supports it. Report what was actually run and its result. | Modify only `test/catalog.test.mjs`; depends on implementation and harness inspection. |\n| Privacy Officer | Decide and document permitted real-name display, retention, and applicable constraints. | Required before any real-data identity implementation, including initials. |\n| Product owner | Clarify intended disposition if real-name display is declined; approve any proposed substitute explicitly. | No substitute is currently approved. |\n| Frontend engineer — author | Implement the approved WEB-3 behavior within scope after the privacy decision is recorded. | Only authorized paths; if the approved requirements need other files or services, return for scope authorization. |\n| Independent QA | Assess the candidate against the observable checks below and record results separately from author validation. | Requires an identified candidate and runnable environment; WEB-3 additionally requires the privacy decision. |\n| Project owner | Approve the final plan and determine release acceptance from QA evidence and unresolved gates. | Full pilot acceptance requires WEB-3 satisfaction. |\n\nNo other file changes, dependencies, external assets, services, or provisioning are authorized by this plan.\n\n## Independent QA scope and observable acceptance\n\nThese checks define future verification; they have not been executed. The eventual QA packet must identify the exact candidate commit, launch/access instructions, relevant viewport targets, approved privacy constraints, and the black-box checks below. Keep author tests and implementation details out of that packet.\n\n| Criterion | Observable check | Acceptance condition |\n| --- | --- | --- |\n| WEB-1 | Navigate filters using only the keyboard; operate their controls, change criteria, and inspect results. | All existing filter functions remain reachable and operable, with visible focus and no keyboard trap. |\n| WEB-2 | Choose filters that produce zero results. Reach and activate clear filters using the keyboard; repeat with a pointer. | Empty-state message and clear filters button appear. Reset clears active filters, restores default results, and leaves usable visible focus. |\n| WEB-2 | Inspect the empty state at 320 CSS pixels and a representative desktop width, including when local artwork is unavailable. | No horizontal page overflow; text and action remain readable and usable. Artwork uses local resources and is not required to understand or recover from the state. |\n| WEB-3: interim boundary | Inspect the permitted static/synthetic candidate and fixture labeling. | No real applicant name, initials, or other real identity data is displayed. This verifies the interim boundary only and does not pass WEB-3. |\n| WEB-3: final pilot | After approval, inspect the real-name display using authorized evaluation data under the Privacy Officer's documented constraints. | The pilot displays the real applicant name as required and follows the approved display and retention decision. Initials or synthetic names alone cannot satisfy WEB-3. |\n\n## Open decisions and gates\n\n1. Privacy Officer: real-name display and retention approval is absent. WEB-3 implementation and full pilot acceptance remain blocked; static and isolated synthetic work may proceed within the approved plan.\n2. Product owner: if the privacy decision prevents the required real-name display, explicitly resolve the requirement or approve a substitute. Do not infer that either initials or fake names are acceptable.\n3. UX and visual reviewers: confirm the proposed focus, responsive, and inherited-style defaults; the supplied reviews do not settle these details.\n4. Engineering and QA: repository contents, existing assets, current filter behavior, test harness, candidate commit, and runnable environment are not evidenced by the pinned inputs. Inspect these before implementation and candidate handoff; report actual verification separately.\n5. Project owner: final plan approval is pending."
+          }
+        ],
+        "decisions": [
+          "Policy overrides the conflicting identity recommendations: neither real names nor real-data initials may be implemented without Privacy Officer approval.",
+          "Static layout and isolated synthetic fixtures are permitted, but synthetic identity does not satisfy WEB-3.",
+          "Implementation is confined to public/catalog.html and test/catalog.test.mjs.",
+          "Author validation and independent QA are separate activities."
+        ],
+        "questions": [
+          "What retention and display requirements will the Privacy Officer approve for the real applicant name?",
+          "Will UX and visual reviewers confirm the proposed responsive and focus behavior?",
+          "Does the Project owner approve this scoped plan?"
+        ],
+        "blockers": [
+          "Missing Privacy Officer approval blocks WEB-3 real-data implementation and full pilot acceptance.",
+          "No repository inspection, candidate commit, runnable environment, or executed verification evidence is supplied."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14032,
+        "output": 1806,
+        "total": 15838,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 40
+      },
+      "elapsedMs": 44720,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed"
+      ]
+    },
+    {
+      "case": "blocked-design-with-safe-work",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "The plan is prepared, but WEB-3 implementation is blocked on the Privacy Officer’s retention and display decision. Isolated synthetic fixture and static layout work may proceed within the authorized paths; project-owner approval of the final plan remains required.",
+        "outputs": [
+          {
+            "slot": "build-plan",
+            "content": "# Website implementation plan — revision 1\n\nDisposition: WEB-3 implementation is blocked. Independently permitted synthetic fixture and static layout work can proceed. This plan does not approve real-name display, initials derived from real data, or synthetic names as fulfillment of WEB-3.\n\n## Reconciled scope and decisions\n\n| Criterion | Planned outcome | Authority and constraints |\n| --- | --- | --- |\n| WEB-1 | Preserve keyboard operation of catalog filters. | Accepted UX requirement. No filter redesign is required. |\n| WEB-2 | Show an empty state when filtering produces no results, with a clear filters button and local assets. | UX supplies behavior; Visual supplies presentation. These recommendations are compatible. |\n| WEB-3 | Pilot displays a real applicant name, subject to an approved retention and display policy. | Brief requires a real name and assigns approval to the Privacy Officer. Approval has not been given. UX preference does not supply that approval. Visual’s interim initials also use real data and are unapproved. |\n\nThe brief’s privacy approval gate controls WEB-3. Neither accepted design review overrides it. An isolated synthetic fixture supports layout work only; Product has not approved fake names as a substitute for the pilot requirement. Do not connect the fixture to applicant records or describe it as WEB-3 acceptance evidence.\n\n## Decision gates\n\n1. **Privacy Officer — WEB-3:** Decide whether real applicant names may be displayed and specify the permitted display and retention conditions. Resume WEB-3 implementation only when a recorded approval supplies actionable conditions. If approval is denied, Product must propose a revised outcome and the project owner must approve the resulting scope change; initials and fake names are not automatic fallbacks.\n2. **Project owner — final plan:** Approve this revision, including its bounded independent work, or approve a revised plan incorporating the Privacy Officer’s decision. The packet names the project owner as final plan approver; it does not impose joint Product/Lead sign-off.\n3. **Implementation boundary:** Policy explicitly permits isolated synthetic fixture and static layout work now. That permission does not authorize real-data integration or the full behavioral build before the applicable plan and privacy gates are satisfied.\n\n## Assignments and dependencies\n\nAll implementation and test changes are limited to `public/catalog.html` and `test/catalog.test.mjs`. No additional paths, services, or assets are authorized. Use assets already available locally within that boundary; if suitable assets are unavailable, report the gap before expanding scope.\n\n| Assignment | One owner | Outcome and inputs | Dependency | Handoff |\n| --- | --- | --- | --- | --- |\n| A — Isolated layout preparation | Frontend engineer | Prepare empty-state and applicant-name layout using an isolated synthetic fixture. Use the brief and both accepted reviews. Edit only the authorized paths. | May proceed now under the explicit policy allowance. No real applicant data. | Reviewable layout candidate, fixture isolation explanation, and list of remaining behavior work. |\n| B — WEB-1 and WEB-2 behavior | Frontend engineer | Preserve keyboard filter operation; implement no-results state and clear filters behavior using the approved layout. Edit only the authorized paths. | Project-owner approval of the applicable plan revision; A’s layout handoff. Independent of WEB-3 privacy approval. | Exact candidate commit and author verification receipt covering the behavior implemented. |\n| C — WEB-3 implementation | Frontend engineer | Implement real-name display according to the recorded privacy conditions. Inputs are the brief, approved plan, and Privacy Officer decision. Edit only the authorized paths. | Privacy approval and project-owner approval of the plan incorporating its conditions. | Exact candidate commit, decision reference, and author verification receipt. |\n| D — Independent verification | QA engineer | Verify the applicable approved criteria against the exact submitted candidate using observable browser behavior. | Current passing author evidence for that candidate and the approvals applicable to its scope. | Criterion-level pass/fail report, candidate commit, observations, and defects. |\n| E — Delivery gate | SDM | Match approvals and verification records to the proposed candidate and recommend disposition. | D’s report and required evidence. | Project-owner review packet, or a blocked handoff naming missing evidence and its owner. |\n\nThe Privacy Officer’s decision and project-owner plan review can proceed in parallel with A. Once the plan is approved, B can proceed while WEB-3 remains blocked. QA can verify an explicitly scoped WEB-1/WEB-2 candidate while WEB-3 awaits approval, but that does not establish pilot completion. If C changes that candidate, QA must identify the replacement commit and repeat affected checks.\n\n## Observable acceptance evidence\n\nThese are planned checks, not executed results. QA must independently select its test data and procedure rather than reuse author test cases or output.\n\n| Criterion | Input or action | Observable pass evidence | Failure evidence |\n| --- | --- | --- | --- |\n| WEB-1 | Navigate to each existing filter using only the keyboard; change its value and apply it through the supported keyboard interaction. | Filters remain reachable and operable, focus remains visible and usable, and catalog results reflect the selected filters. | Keyboard trap, unreachable or inoperable filter, lost usable focus, or results inconsistent with the selection. |\n| WEB-2 | Apply a combination of filters that yields no matching items, then activate clear filters. Repeat activation using the keyboard. | A clear empty state and clear filters button appear; local presentation assets load without external asset requests. Activating the button clears active filters and restores the unfiltered catalog. | Blank or misleading results area, absent/inoperable button, filters remaining active, failure to restore results, or external/missing presentation assets. |\n| WEB-3 | After approval, view an authorized applicant in the pilot under the approved conditions. | The displayed name matches the authorized real applicant and follows the Privacy Officer’s recorded display conditions. Verify retention against the specific conditions and appropriate evidence once defined. | Initials or synthetic names substituted for the required real name, unauthorized display, or violation of an approved condition. Until approval and retention conditions exist, this criterion remains blocked and cannot pass. |\n\n## Verification and completion gates\n\nThe build owner supplies an exact candidate commit and a receipt identifying which author checks passed and what they covered. Source checks alone do not establish browser behavior. QA receives the approved criteria, privacy conditions when applicable, candidate identity, and observable expectations above; author evidence is an entry gate, not independent acceptance evidence.\n\nSDM advances only the candidate supported by current passing evidence. A failed or missing required check blocks that candidate’s handoff and returns a narrow issue to its owner. Full pilot review requires WEB-1, WEB-2, and WEB-3 evidence plus the applicable approvals. Project-owner approval, merge, and release remain separate decisions.\n\n## Open matters and deferrals\n\n- Privacy Officer approval and actionable retention/display conditions are missing; WEB-3 remains blocked.\n- Project-owner approval of the final plan is pending.\n- Existing filter controls, available local assets, candidate commits, and verification receipts are not supplied. Implementation inspection must establish the baseline without expanding authorized paths.\n- Broader redesign, new external assets, and synthetic-name substitution are outside this plan.\n- No implementation, browser check, or test execution is claimed."
+          }
+        ],
+        "decisions": [
+          "The brief’s Privacy Officer approval requirement governs WEB-3 over either design recommendation.",
+          "Real-name display and initials derived from real data remain blocked; synthetic fixtures are permitted only for isolated preparation.",
+          "Project-owner approval is the final plan gate; no additional Product/Lead approval requirement is invented.",
+          "WEB-1 and WEB-2 can form an independently verifiable slice after applicable plan approval, without claiming full pilot completion."
+        ],
+        "questions": [
+          "Privacy Officer: What retention and display conditions, if any, are approved for the real applicant name required by WEB-3?",
+          "Project owner: Is plan revision 1 approved for its stated scope and gates?"
+        ],
+        "blockers": [
+          "WEB-3: The Privacy Officer must provide recorded approval and actionable retention/display conditions before real-data implementation can resume.",
+          "The project owner must approve the applicable final plan revision before behavioral implementation proceeds beyond explicitly permitted preparation.",
+          "Candidate commits and verification evidence are not supplied; no candidate is eligible for a QA or delivery handoff on this record."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13572,
+        "output": 1867,
+        "total": 15439,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 68
+      },
+      "elapsedMs": 44120,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-exact-candidate",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared the independent QA handoff from the pinned artifacts. Repository inspection and Docker execution evidence remain unavailable.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nCandidate identifier supplied by the runner: `123a456b789c123a456b789c123a456b789c123a`\n\nSupplied base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nSource of acceptance scope: accepted Product criteria CAT-1, CAT-2, and CAT-3.\n\n## Independent black-box verification\n\nQA owns verification against the candidate's public command-line interface, using synthetic data only.\n\n| Criterion | Invocation | Required observable result |\n| --- | --- | --- |\n| CAT-1 | `--list-pets` | Exit status 0; stdout parses as JSON. |\n| CAT-2 | No arguments | Exit status 0; prints `Hello`. |\n| CAT-3 | An unknown flag | Exit status 2; prints usage to stderr. |\n\nCapture the resolved candidate commit, exact invocation, exit status, stdout, and stderr for each case. Determine results independently from these observations. Do not impose an unspecified JSON schema or additional output restrictions.\n\n## Evidence and ownership\n\nThis packet defines scope; it does not report executed QA checks. The candidate identifier comes from the supplied artifact and has not been resolved against Git.\n\nThe runner or engineering owner must provide a checkout resolving this identifier to an exact Git commit, plus the runnable entry point and launch instructions. QA must record the resolved commit before testing; any mismatch returns to the SDM for reconciliation.\n\nQA returns a criterion-by-criterion verdict with captured evidence and any execution blockers. The SDM owns reconciliation and release disposition."
+          }
+        ],
+        "decisions": [
+          "The supplied author receipt reports success against the same candidate identifier, but this is reported evidence rather than an independently executed check.",
+          "The author receipt covers a Node process and supplies no Docker execution evidence. It does not establish Docker validation.",
+          "Author checks, internal helper details, and implementation paths are excluded from the independent QA packet."
+        ],
+        "questions": [],
+        "blockers": [
+          "No Git checkout or diff is available in the pinned inputs, so the supplied candidate identifier and changes could not be inspected.",
+          "No Docker author receipt was supplied.",
+          "The runnable CLI entry point and launch instructions are missing; QA needs them before execution."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14061,
+        "output": 664,
+        "total": 14725,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 109
+      },
+      "elapsedMs": 17978,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-exact-candidate",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Candidate is eligible for independent QA; the supplied author receipt passes and matches the exact candidate.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nDisposition: advance to independent QA.\n\nCandidate: `123a456b789c123a456b789c123a456b789c123a`\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\nScope: pet-listing CLI behavior and existing greeting/error behavior. Changed paths: `src/pets.mjs`, `test/pets.test.mjs`.\n\nThe supplied runner author-test receipt identifies this exact candidate and reports a pass with node-process scope. This satisfies the author-check entry gate; independent behavior verification remains pending. No checks were executed for this handoff.\n\n## Independent black-box verification\n\nQA owns verification against the exact candidate. Establish the supported CLI launch command, represented below as `<CLI>`, before running these checks. Use synthetic data only; no real customer data.\n\n| Criterion | Invocation | Required observable result |\n| --- | --- | --- |\n| CAT-1 | `<CLI> --list-pets` | Exit code 0; stdout parses as JSON. Product specifies no JSON schema or stderr requirement. |\n| CAT-2 | `<CLI>` with no arguments | Exit code 0; stdout prints `Hello`. Product specifies no newline or stderr requirement. |\n| CAT-3 | `<CLI> --unknown-flag` | Exit code 2; stderr prints usage. Product specifies no exact usage text or stdout requirement. |\n\nFor each criterion, record the actual invocation, candidate commit, exit code, stdout, stderr, and pass/fail outcome. Derive checks independently from these accepted criteria.\n\nThe supplied inputs do not identify the supported CLI launch command. The build owner must provide it before QA execution; this does not prevent routing the packet to QA.\n\nQA results remain pending. This handoff grants no project-owner approval, merge, or release authorization."
+          }
+        ],
+        "decisions": [
+          "Advance the exact candidate to independent QA because the supplied passing author receipt matches its commit.",
+          "Keep independent verification limited to accepted CAT-1, CAT-2, and CAT-3 behavior without adding unspecified output requirements."
+        ],
+        "questions": [
+          "Build owner: what is the supported CLI launch command for this candidate?"
+        ],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14860,
+        "output": 576,
+        "total": 15436,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 68
+      },
+      "elapsedMs": 14821,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-exact-candidate",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared the independent QA packet from the pinned candidate metadata, author receipt, and accepted Product criteria. No checks were executed.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nOwner: Independent QA\n\nCandidate commit: `123a456b789c123a456b789c123a456b789c123a`\n\nBase commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nVerify this exact candidate through its public command-line interface. Use synthetic data only; no real customer data.\n\n## Independent black-box scope\n\n| Criterion | Invocation | Observable acceptance |\n| --- | --- | --- |\n| CAT-1 | `--list-pets` | Exits 0 and emits valid JSON on stdout. |\n| CAT-2 | No arguments | Exits 0 and prints `Hello`. |\n| CAT-3 | An unknown flag | Exits 2 and prints usage to stderr. |\n\nQA should capture the candidate identity, invocation, exit code, stdout, stderr, and verdict for each criterion. Report failures and ambiguities against the corresponding criterion. Derive verification independently from these accepted criteria.\n\nProduct has not specified the pet JSON schema or contents, exact usage wording, or whitespace requirements. Do not introduce additional acceptance requirements without Product clarification.\n\n## Ownership and handoff limits\n\n- Independent QA: obtain the exact candidate and run the black-box checks above.\n- Engineering/runner: supply accessible Git candidate evidence and a Docker execution receipt before container verification is treated as established.\n- Product: resolve any acceptance ambiguity that prevents a verdict.\n- SDM: review independent QA results before acceptance.\n\nThis packet is based on supplied reference artifacts. Direct Git inspection and Docker execution have not been established, and no independent verification result is claimed."
+          }
+        ],
+        "decisions": [
+          "The supplied author receipt names the exact candidate commit and reports success, but its scope is node-process; it does not establish Docker execution.",
+          "Author test details and implementation details are excluded from the independent QA packet.",
+          "Accepted Product criteria define the independent verification scope."
+        ],
+        "questions": [],
+        "blockers": [
+          "Direct Git candidate evidence and a Docker author receipt were not provided. The current runner cannot establish them from the pinned artifacts."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 12808,
+        "output": 624,
+        "total": 13432,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 136
+      },
+      "elapsedMs": 19772,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-exact-candidate",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Candidate is eligible for independent QA based on the supplied passing author receipt. No checks were executed during this review.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to independent QA\n\nCandidate: `123a456b789c123a456b789c123a456b789c123a`\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\nDisposition: advance this exact candidate to independent QA.\n\nScope: independently verify the public CLI behavior in `src/pets.mjs` against the accepted Product criteria. Use synthetic data only; no real customer data.\n\nThe supplied runner author receipt identifies this exact candidate and reports a passing check with `node-process` scope. This satisfies the supplied author-check entry gate; it does not establish independent acceptance. No checks were executed during this handoff review.\n\n## Black-box verification\n\nRun each command against the exact candidate and independently capture its exit code, stdout, and stderr.\n\n| Criterion | Invocation | Required observable result |\n| --- | --- | --- |\n| CAT-1 | `node src/pets.mjs --list-pets` | Exit code `0`; stdout parses as JSON. The accepted criterion does not specify a JSON schema or stderr content. |\n| CAT-2 | `node src/pets.mjs` | Exit code `0`; stdout prints `Hello`. The accepted criterion does not specify trailing whitespace or stderr content. |\n| CAT-3 | `node src/pets.mjs --unknown` | Exit code `2`; stderr prints usage information. The accepted criterion does not specify stdout content or exact usage wording. |\n\nDevelop independent checks from these public behaviors. Record pass, fail, or blocked for each criterion, with the command, observed exit code, stdout, stderr, and tested commit. Do not infer additional requirements for unspecified output details.\n\nReturn any failures to the SDM for routing under the applicable fix policy. Any replacement candidate requires a matching passing author receipt before independent QA begins.\n\nThis handoff authorizes independent QA only. Project-owner approval, merge, and release remain separate decisions."
+          }
+        ],
+        "decisions": [
+          "The supplied passing author receipt matches the exact candidate commit and supports advancement to independent QA.",
+          "Independent QA must verify all three accepted criteria through the public CLI."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13601,
+        "output": 604,
+        "total": 14205,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 99
+      },
+      "elapsedMs": 16405,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-stale-receipt",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared the independent QA packet. Candidate readiness remains unverified because the supplied author receipt names a different commit and provides no Docker evidence.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\n**Candidate:** `123a456b789c123a456b789c123a456b789c123a`\n\n**Base:** `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\n**Status:** Pending release to QA. SDM must resolve candidate evidence alignment before QA begins. Verify the exact candidate identifier resolves before execution; do not substitute another revision.\n\n## Independent black-box scope\n\nQA owns independent verification of the following accepted Product criteria against the exact candidate:\n\n| Criterion | Invocation | Observable acceptance |\n| --- | --- | --- |\n| CAT-1 | `--list-pets` | Exits 0 and emits valid JSON on stdout. |\n| CAT-2 | No arguments | Exits 0 and prints `Hello`. |\n| CAT-3 | An unknown flag | Exits 2 and prints usage to stderr. |\n\nUse synthetic inputs only; no real customer data. Product has not specified the pet JSON schema or contents, exact usage text, or the output stream for `Hello`; do not add those as acceptance requirements.\n\n## Ownership and sequence\n\n1. SDM: resolve candidate identity and readiness evidence, then release this exact candidate to QA.\n2. QA: independently exercise the command-line behaviors above, capturing candidate identity, invocation, exit status, stdout, and stderr.\n3. QA: report pass, fail, or blocked for each criterion, with observed evidence and any execution limitations.\n\nNo independent checks have been executed for this handoff."
+          }
+        ],
+        "decisions": [
+          "Completed the handoff document while retaining a readiness hold.",
+          "Kept author tests, changed paths, and implementation details out of the independent QA packet.",
+          "Treated the supplied artifacts as reference evidence, without claiming repository inspection or check execution."
+        ],
+        "questions": [
+          "What is the supported command or executable entry point for QA to invoke?"
+        ],
+        "blockers": [
+          "The author receipt reports success for `987a654b321c987a654b321c987a654b321c987a`, not candidate `123a456b789c123a456b789c123a456b789c123a`; it does not establish candidate readiness.",
+          "The supplied receipt has scope `node-process` and contains no Docker author evidence. Candidate-aligned Docker evidence is needed to complete the required readiness review.",
+          "No repository access was provided, so the candidate's Git identity and contents could not be independently inspected."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14021,
+        "output": 663,
+        "total": 14684,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 98
+      },
+      "elapsedMs": 18337,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed",
+        "rerun required"
+      ]
+    },
+    {
+      "case": "qa-stale-receipt",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "QA handoff is blocked: the passing author receipt covers a different commit from the pinned candidate.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nDisposition: **Blocked; independent QA must not begin.**\n\nCandidate: `123a456b789c123a456b789c123a456b789c123a`\n\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nChange scope: `src/pets.mjs` and `test/pets.test.mjs`. Independent QA covers the CLI's externally observable behavior against the accepted Product criteria.\n\n## Entry gate\n\nThe supplied passing author receipt names `987a654b321c987a654b321c987a654b321c987a`, not the candidate above. It therefore does not establish a passing author check for this candidate. The build-catalog owner must supply a fresh passing author receipt tied to the exact proposed candidate before QA begins. If the candidate changes, update this packet to that exact commit and recheck provenance.\n\n## Independent black-box verification scope\n\nAfter the entry gate passes, QA independently invokes the CLI from the exact candidate. `<CLI>` below is a placeholder for the supported launch command, which the build-catalog owner must provide.\n\n| Criterion | Invocation | Required observable result |\n| --- | --- | --- |\n| CAT-1 | `<CLI> --list-pets` | Exit code 0; stdout contains valid JSON. Product specifies no stderr requirement. |\n| CAT-2 | `<CLI>` with no arguments | Exit code 0; prints `Hello`. Product does not specify the output stream or exact whitespace. Capture stdout and stderr separately. |\n| CAT-3 | `<CLI> <unknown-flag>` using a flag confirmed unsupported by the CLI | Exit code 2; stderr contains usage text. Product specifies no stdout requirement. |\n\nUse no real customer data. Record the exact invocation, candidate commit, exit code, stdout, stderr, and independent verdict for every criterion. Surface ambiguities to Product rather than adding acceptance requirements.\n\nThis packet defines future verification; it reports no executed QA checks. Passing the entry gate authorizes independent QA only, not approval, merge, or release."
+          }
+        ],
+        "decisions": [
+          "The author receipt's passed=true result cannot advance a candidate with a different commit.",
+          "Preserve CAT-1, CAT-2, and CAT-3 as the independent verification scope without importing author implementation or test details."
+        ],
+        "questions": [
+          "Build-catalog owner: what is the supported CLI launch command for the pinned candidate?"
+        ],
+        "blockers": [
+          "Author-check provenance mismatch: candidate 123a456b789c123a456b789c123a456b789c123a has no supplied passing receipt; the receipt tests 987a654b321c987a654b321c987a654b321c987a. Build-catalog owner must provide a fresh passing record for the exact proposed candidate before QA begins."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14816,
+        "output": 727,
+        "total": 15543,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 45
+      },
+      "elapsedMs": 17582,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-stale-receipt",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared the QA packet with a handoff hold: the supplied author receipt covers a different commit and does not establish Docker verification.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\n**Candidate:** `123a456b789c123a456b789c123a456b789c123a`\n\n**Base:** `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\n**Status:** Hold pending SDM confirmation of candidate readiness. QA must verify this exact candidate; any replacement commit requires an updated handoff.\n\n## Independent black-box scope\n\nSource: accepted Product criteria CAT-1 through CAT-3.\n\n| Criterion | Invocation | Observable acceptance |\n| --- | --- | --- |\n| CAT-1 | Run the application with `--list-pets`. | Exit status is 0; stdout contains valid JSON. |\n| CAT-2 | Run the application without arguments. | Exit status is 0; stdout prints `Hello`. |\n| CAT-3 | Run the application with an unknown flag. | Exit status is 2; stderr prints usage information. |\n\nUse synthetic inputs only; no real customer data. Product supplied no JSON schema, pet inventory, or exact usage wording, so those are not additional acceptance requirements.\n\n## Owners and evidence\n\n- **SDM:** Resolve the readiness hold and confirm the exact candidate before releasing QA execution.\n- **QA:** Independently exercise the public command-line interface and record the candidate commit, invocation, exit status, stdout, stderr, and verdict for each criterion.\n- **QA:** Return failures and ambiguities to SDM for disposition.\n\nThis packet defines verification scope; it reports no executed checks."
+          }
+        ],
+        "decisions": [
+          "Keep the QA packet limited to candidate identity, accepted behavior, ownership, and independent evidence requirements.",
+          "Hold handoff because the author receipt names testedCommit 987a654b321c987a654b321c987a654b321c987a, which differs from the candidate.",
+          "The supplied receipt reports passed=true with scope node-process; it does not establish the required Docker author verification."
+        ],
+        "questions": [],
+        "blockers": [
+          "Author must supply a Docker author receipt for the exact candidate commit before SDM releases the handoff.",
+          "Git contents and execution evidence could not be independently inspected under this assignment's permissions. Review was limited to the pinned artifacts; no checks were executed."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14025,
+        "output": 635,
+        "total": 14660,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 75
+      },
+      "elapsedMs": 15867,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed",
+        "rerun required"
+      ]
+    },
+    {
+      "case": "qa-stale-receipt",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "QA handoff is blocked: the passing author receipt covers a different commit from the pinned candidate.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA — HOLD\n\nCandidate: `123a456b789c123a456b789c123a456b789c123a`\n\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nScope: pet-listing CLI behavior and preservation of the default greeting and unknown-flag handling. Use no real customer data.\n\nQA must not begin until SDM confirms a passing author-check receipt tied to this exact candidate. Author verification is an entry gate; independent QA must establish the observable behavior separately.\n\n## Independent black-box verification\n\nUse the project's documented CLI entry point. The pinned inputs do not identify that entry point; the build owner must supply the exact runnable invocation before execution.\n\n| Criterion | Invocation | Required observable result |\n| --- | --- | --- |\n| CAT-1 | Documented CLI entry point with `--list-pets` | Exit code 0; stdout contains valid JSON. Stderr is not specified by the accepted criterion. |\n| CAT-2 | Documented CLI entry point with no arguments | Exit code 0; stdout prints `Hello`. Stderr is not specified by the accepted criterion. |\n| CAT-3 | Documented CLI entry point with an unknown flag chosen by QA | Exit code 2; stderr prints usage. Stdout is not specified by the accepted criterion. |\n\nQA should record the exact candidate commit, complete invocation, exit code, stdout, stderr, and pass/fail result for each criterion. Do not infer a required JSON schema or additional stream constraints from the supplied criteria.\n\nNo checks were executed for this handoff. This packet does not authorize approval, merge, or release."
+          }
+        ],
+        "decisions": [
+          "Hold independent QA until passing author-check evidence matches candidate 123a456b789c123a456b789c123a456b789c123a.",
+          "The build owner must provide a fresh receipt for the pinned candidate; any replacement candidate requires its own matching receipt and SDM handoff review."
+        ],
+        "questions": [
+          "Build owner: what is the exact runnable CLI entry-point invocation for independent QA?"
+        ],
+        "blockers": [
+          "Author-check evidence mismatch: the supplied passing author-tests receipt names testedCommit 987a654b321c987a654b321c987a654b321c987a, not candidate 123a456b789c123a456b789c123a456b789c123a. The build owner must supply a passing receipt for the exact candidate before SDM releases the QA hold."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14820,
+        "output": 665,
+        "total": 15485,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 93
+      },
+      "elapsedMs": 16183,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "bounded-rework",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Delivery review complete. The candidate is not ready for owner approval because WEB-2 has an unresolved keyboard-focus blocker.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\nCandidate: `241abcde356f241abcde356f241abcde356f241a`\n\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nChanged path: `public/catalog.html`\n\n## Accepted review outcomes\n\nAll four review artifacts reference the exact candidate above. Acceptance of these review artifacts does not constitute approval of the prototype.\n\n| Review | Outcome |\n| --- | --- |\n| UX | **Blocker — `lost-keyboard-focus`:** clearing a search causes the filter rerender to drop keyboard focus. WEB-2 remains unresolved. |\n| Visual | **Backlog — `card-spacing`:** card gaps vary slightly on large screens. |\n| Lead designer | No findings reported. |\n| Security engineer | No findings reported. |\n\nThe supplied author receipt reports a passing `source-smoke` check against this candidate. It is author evidence, not independent browser validation, and cannot establish keyboard-focus behavior. No checks were executed for this delivery review. No Docker receipt or direct Git inspection evidence was supplied.\n\n## Disposition and next steps\n\nHold this candidate from final approval. Project policy permits one remaining fix loop; route it to the website-build owner to resolve `lost-keyboard-focus`, with the authorized change scope limited to `public/catalog.html`. If the fix requires another path, SDM must reconcile the scope before routing that work.\n\n1. **Website-build owner:** repair focus loss after clearing search and return the exact replacement commit and author check receipt.\n2. **UX, visual, lead designer, and security reviewers:** review the replacement candidate again. Policy requires all four reviews for every new candidate.\n3. **Independent QA/browser validator:** after the replacement commit is pinned, check WEB-2 in a browser. Using only the keyboard, reach the search/filter control, enter a query, clear it, and verify focus remains usable at the relevant control and keyboard interaction can continue. Record the exact commit, browser, reproduction steps, and observed result. The QA packet must contain that commit and observable scope, without author tests or implementation details. The current reviewed commit above identifies the reported defect; no replacement commit is available yet.\n4. **SDM:** reconcile the new reviews and browser evidence, then present the candidate to the project owner for final approval.\n\n## Deferred work and limitations\n\n- **Website-build owner, with visual reviewer verification:** defer `card-spacing` as visual backlog; normalize large-screen card gaps in a later scoped change.\n- **WEB-2:** browser validation remains required; source smoke cannot close it.\n- **WEB-1 and WEB-3:** their definitions and criterion-specific validation evidence were not supplied. No completion claim is made for either criterion.\n- No browser result, replacement candidate, or owner approval is present in the pinned inputs. The project owner retains final approval."
+          }
+        ],
+        "decisions": [
+          "Hold the reviewed prototype from final approval because the UX blocker remains open.",
+          "Route the one permitted remaining fix loop to the website-build owner.",
+          "Require all four implementation reviews again for any replacement candidate.",
+          "Defer card-spacing as visual backlog."
+        ],
+        "questions": [
+          "What are the definitions and required validation evidence for WEB-1 and WEB-3?"
+        ],
+        "blockers": [
+          "The accepted UX review reports keyboard focus loss after clearing search on the exact candidate.",
+          "Independent browser evidence for WEB-2 is still required before closure."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13265,
+        "output": 804,
+        "total": 14069,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 18987,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed"
+      ]
+    },
+    {
+      "case": "bounded-rework",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Candidate 241abcde356f241abcde356f241abcde356f241a cannot advance: the accepted UX review reports a WEB-2 keyboard-focus blocker. One fix loop remains.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\n**Disposition: blocked.** Candidate `241abcde356f241abcde356f241abcde356f241a`, based on `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, changes `public/catalog.html`. It is not eligible for a positive project-owner approval recommendation.\n\nAll supplied implementation reviews and the author receipt identify this exact candidate:\n\n- **UX:** blocking finding `lost-keyboard-focus` affects **WEB-2**. Clearing a search causes the filter rerender to drop keyboard focus.\n- **Visual:** backlog finding `card-spacing`; gaps vary slightly on large screens. Defer this polish separately from the blocking fix.\n- **Lead Designer:** no findings reported.\n- **Security Engineer:** no findings reported.\n- **Author checks:** the supplied receipt reports a passing `source-smoke` check. Its scope does not establish browser behavior or resolve the UX finding.\n\n## Remaining fix loop\n\nThe run policy permits one remaining fix loop. The website-build owner should fix focus preservation after clearing search and submit an exact replacement commit with fresh passing author checks. All four implementation reviewers—UX, Visual, Lead Designer, and Security Engineer—must review that replacement candidate again before a renewed delivery decision.\n\nIndependent browser validation must verify **WEB-2** on the replacement commit: focus the search control using the keyboard, enter a search, then clear it; keyboard focus must remain on the search control after the filter rerenders. Record the exact commit, browser, observed focus, and pass/fail result. Author verification and independent browser evidence must remain distinct.\n\n**WEB-1** and **WEB-3** remain in delivery scope, but their criterion definitions and criterion-specific validation evidence are absent from this packet. No claim of full acceptance for either criterion is supported; obtain their approved definitions and corresponding evidence for the renewed handoff.\n\n## Owner decision and deferred work\n\nThe project owner retains final approval authority. If the remaining fix loop does not resolve the blocker, escalate the unresolved finding and required decision to the project owner; no further fix loop is authorized by this packet. Approval, merge, and release remain separate decisions.\n\nDeferred work: large-screen card spacing. No acceptance of residual keyboard-focus risk is recorded. This review relies on supplied evidence; no checks were executed for this assignment."
+          }
+        ],
+        "decisions": [
+          "Use the one remaining authorized fix loop for the WEB-2 keyboard-focus blocker.",
+          "Require fresh author checks, all four implementation reviews, and independent browser validation on the replacement candidate.",
+          "Keep card spacing in the backlog, separate from the blocking delivery decision."
+        ],
+        "questions": [
+          "What are the approved WEB-1 and WEB-3 definitions and their criterion-specific validation evidence?"
+        ],
+        "blockers": [
+          "WEB-2: accepted UX finding lost-keyboard-focus reports that clearing search drops keyboard focus. The website-build owner must fix it within the remaining loop.",
+          "A renewed handoff requires a replacement commit with fresh passing author checks, all implementation reviews, and independent WEB-2 browser evidence."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14062,
+        "output": 734,
+        "total": 14796,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 17520,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "bounded-rework",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Delivery review complete. The prototype is not ready for owner approval: the accepted UX review reports a blocking keyboard-focus defect.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\n## Exact reviewed candidate\n\n- Commit: `241abcde356f241abcde356f241abcde356f241a`\n- Base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n- Changed path: `public/catalog.html`\n\nThe candidate record and all four implementation reviews identify this same commit. This report uses the pinned artifacts; no repository inspection or checks were executed for this assignment.\n\n## Accepted review outcomes\n\n| Review | Recorded outcome | Disposition |\n| --- | --- | --- |\n| UX | **Blocker — `lost-keyboard-focus`:** filter rerender drops keyboard focus after clearing a search. | Must be fixed before approval; affects WEB-2. |\n| Visual | **Backlog — `card-spacing`:** gaps vary slightly on large screens. | Defer as visual polish. |\n| Lead designer | No findings recorded. | No issue raised in the supplied review. |\n| Security engineer | No findings recorded. | No issue raised in the supplied review. |\n\nAcceptance of the review artifacts does not mean acceptance of the prototype. The UX blocker remains open. Empty findings do not establish comprehensive validation. The supplied evidence does not separately establish completion of WEB-1 or WEB-3.\n\n## Author evidence and remaining validation\n\nThe supplied author receipt reports passing `source-smoke` checks against the exact reviewed commit. This is reported evidence, not an independently executed check. Run policy explicitly states that source smoke cannot establish keyboard-focus behavior after clearing a search; WEB-2 still requires browser validation.\n\n## Required next steps\n\n1. **SDM:** route the one remaining fix loop permitted by run policy to the website-build owner for `lost-keyboard-focus` in `public/catalog.html`.\n2. **Website-build owner:** preserve keyboard focus through the clear-search interaction and return an exact replacement commit with its author receipt.\n3. **UX, visual, lead-designer, and security reviewers:** review the replacement candidate again. Existing reviews apply only to the commit above.\n4. **Independent QA/browser validator:** receive the exact replacement commit and verify, using keyboard interaction, that clearing a populated search leaves focus on the intended usable control and permits continued keyboard operation. Record browser/version, observed focus, and outcome. The QA packet should contain the exact commit and observable scope, excluding author tests and implementation details. No replacement commit or completed browser result is currently supplied.\n5. **Project owner:** make the final approval decision after the blocker is resolved and the replacement reviews and browser evidence are available.\n\n## Deferred work and delivery status\n\nDefer `card-spacing` to the website-build owner as visual polish, with visual-reviewer verification on large screens. Do not defer the keyboard-focus blocker.\n\n**Delivery status: hold for correction and browser validation.** This assignment's review is complete; the prototype is not ready for final approval. No external resource creation is required."
+          }
+        ],
+        "decisions": [
+          "Hold prototype approval because the accepted UX review contains an unresolved WEB-2 blocker.",
+          "Route the single remaining fix loop allowed by run policy; require all four implementation reviewers to review the replacement commit.",
+          "Defer card-spacing polish to the backlog."
+        ],
+        "questions": [],
+        "blockers": [
+          "Prototype approval remains blocked by lost-keyboard-focus; a corrected candidate, renewed implementation reviews, and browser validation are outstanding.",
+          "The supplied evidence does not separately establish WEB-1 or WEB-3 completion."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13267,
+        "output": 768,
+        "total": 14035,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 18978,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed"
+      ]
+    },
+    {
+      "case": "bounded-rework",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Project-owner approval handoff is blocked by WEB-2 keyboard focus loss. Route one permitted fix loop to the build owner.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\n**Disposition: blocked.** Candidate `241abcde356f241abcde356f241abcde356f241a` is not eligible to advance for project-owner approval because the accepted UX review reports a blocking WEB-2 failure.\n\nCandidate base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Changed path: `public/catalog.html`.\n\n## Evidence and review outcomes\n\nAll supplied reviews and the author receipt identify this exact candidate.\n\n- Author check: passing, limited to `source-smoke`. This does not establish browser behavior or resolve the UX blocker.\n- UX: blocker `lost-keyboard-focus` — clearing a search causes the filter rerender to drop keyboard focus. This affects WEB-2.\n- Visual: backlog finding `card-spacing` — gaps vary slightly on large screens.\n- Lead designer: no findings reported.\n- Security engineer: no findings reported.\n\nThese outcomes summarize supplied evidence; no checks were executed for this delivery review. Empty finding lists do not establish independent browser verification.\n\n## Required fix and validation\n\nRoute the one remaining permitted fix loop to the website-build owner: preserve keyboard focus when clearing search, keeping the change narrowly scoped to WEB-2. Submit the replacement candidate commit and fresh passing author-check evidence before independent QA begins.\n\nThe replacement candidate must receive fresh reviews from UX, Visual, Lead Designer, and Security Engineering. Prior reviews apply only to the current commit.\n\nIndependent browser validation must exercise clearing a search and verify that keyboard focus is retained on the filter control so keyboard interaction can continue. Record the exact candidate, browser, action, and observed result. Source smoke cannot satisfy this gate.\n\nPreserve WEB-1, WEB-2, and WEB-3 in the replacement handoff. The supplied packet identifies the WEB-2 behavior but omits the approved definitions and observable acceptance conditions for WEB-1 and WEB-3; obtain those from Product before claiming criterion-level verification. No independent browser-validation receipt is supplied.\n\n## Deferred work and authority\n\nKeep `card-spacing` in the backlog, separate from the focus blocker. Deferral is not evidence that the project owner has accepted residual risk.\n\nThe current candidate remains blocked while the fix proceeds. After the replacement has passing required checks, fresh implementation reviews, and browser evidence resolving WEB-2, return it for delivery review. If the permitted fix loop fails, escalate the unresolved decision to the project owner rather than requesting another loop.\n\nThe project owner retains final approval. This review performs no approval, merge, or release."
+          }
+        ],
+        "decisions": [
+          "Use the one remaining fix loop for WEB-2 keyboard focus loss.",
+          "Keep card-spacing as nonblocking backlog work.",
+          "Require all implementation reviewers to review the replacement candidate."
+        ],
+        "questions": [
+          "Product: what are the approved definitions and observable acceptance conditions for WEB-1 and WEB-3?"
+        ],
+        "blockers": [
+          "WEB-2: accepted UX finding lost-keyboard-focus reports that clearing search drops filter focus. The website-build owner must fix it within the remaining loop.",
+          "Independent browser evidence resolving WEB-2 is missing; source-smoke coverage is insufficient. QA must provide it on the replacement candidate.",
+          "The replacement candidate requires fresh passing author checks and fresh reviews from all four implementation reviewers before advancement."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14064,
+        "output": 784,
+        "total": 14848,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 51
+      },
+      "elapsedMs": 22396,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "owner-review-ready",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Delivery notes identify the exact candidate, accepted reviews and browser evidence, and deferred spacing work for project-owner review.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\nThe prototype candidate is ready for project-owner review under the supplied project policy. Merge or release requires the project owner's approval; rollout is outside this assignment.\n\n## Exact candidate\n\n- Commit: `241abcde356f241abcde356f241abcde356f241a`\n- Base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n- Changed path: `public/catalog.html`\n\n## Accepted review outcomes\n\nAll four supplied implementation reviews reference this exact candidate and are accepted by project policy:\n\n| Review | Outcome |\n| --- | --- |\n| UX | No findings recorded. |\n| Visual | One backlog finding: `card-spacing`; gaps vary slightly on large screens. |\n| Lead designer | No findings recorded. |\n| Security engineer | No findings recorded. |\n\nThe visual backlog item does not gate owner review.\n\n## Validation evidence and limits\n\nThe supplied independent browser receipt reports a pass on this exact commit for WEB-1 catalog filter, WEB-2 keyboard and focus, and WEB-3 responsive layout. Project policy accepts this evidence; no remaining browser validation is required by the pinned inputs. The receipt does not specify browser versions, viewport dimensions, or detailed scenarios, so broader coverage is not established.\n\nThe separate author receipt reports passing source-smoke checks on the same commit. This is author evidence, separate from the independent browser evidence. No checks were executed and no repository inspection was performed for this delivery review; conclusions rely on the supplied artifacts.\n\n## Deferred work and ownership\n\n- Engineering: normalize large-screen card spacing for backlog item `card-spacing`.\n- Visual reviewer: review the spacing follow-up when available.\n- Project owner: review this candidate and decide whether to approve merge or release.\n\nNo blocking findings or unresolved questions are recorded in the supplied inputs. Any follow-up candidate will need validation appropriate to its changes; the accepted evidence here applies only to the commit identified above."
+          }
+        ],
+        "decisions": [
+          "Accepted browser evidence and all four reviews apply to the exact candidate commit.",
+          "Card spacing remains non-gating backlog work.",
+          "Merge and release approval remain exclusively with the project owner; no rollout is included."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13340,
+        "output": 514,
+        "total": 13854,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 13312,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "owner-review-ready",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Candidate 241abcde356f241abcde356f241abcde356f241a is eligible for project-owner review. All required evidence matches the candidate; card spacing remains backlog.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\nRecommend project-owner review of prototype candidate `241abcde356f241abcde356f241abcde356f241a`, based on `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, changing `public/catalog.html`.\n\nAll supplied receipts and implementation reviews identify this exact candidate and are accepted under the project policy:\n\n- Author checks: passing, limited to source smoke testing.\n- UX review: no findings.\n- Visual review: one backlog finding, `card-spacing`—gaps vary slightly on large screens.\n- Lead Designer review: no findings.\n- Security Engineer review: no findings.\n\nAccepted independent browser evidence records a pass for each approved criterion:\n\n| Criterion | Browser check | Recorded result |\n| --- | --- | --- |\n| WEB-1 | Catalog filter | Pass |\n| WEB-2 | Keyboard and focus | Pass |\n| WEB-3 | Responsive layout | Pass |\n\nNo remaining browser validation is identified by the supplied evidence or policy. The browser receipt lists checks and outcomes without detailed scenarios or browser coverage; this handoff does not establish coverage beyond those recorded checks. No checks were executed for this delivery review.\n\nDefer `card-spacing` to the visual backlog; it does not gate owner review. No other deferred work or blocking findings are recorded.\n\nThe project owner alone decides approval, merge, and release. This handoff performs none of those actions, and rollout is outside this assignment."
+          }
+        ],
+        "decisions": [
+          "Advance the exact candidate to project-owner review based on accepted, matching author, browser, and specialist-review evidence.",
+          "Keep card-spacing as nonblocking backlog under the supplied project policy."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 15396,
+        "output": 455,
+        "total": 15851,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 0
+      },
+      "elapsedMs": 12408,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "owner-review-ready",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared owner delivery notes for the exact prototype candidate, accepted reviews and browser evidence, and deferred spacing work.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\nThe prototype candidate is ready for project owner review. Project owner approval is required for merge or release; neither approval nor rollout is part of this assignment.\n\n## Exact candidate\n\n- Commit: `241abcde356f241abcde356f241abcde356f241a`\n- Base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n- Changed path: `public/catalog.html`\n\nThese identifiers come from the pinned candidate artifact. No Git inspection or checks were executed for this delivery review.\n\n## Accepted implementation reviews\n\nAll four supplied reviews identify the exact candidate above and are accepted under the pinned project policy:\n\n| Review | Outcome |\n| --- | --- |\n| UX | No findings reported. |\n| Visual | One deferred backlog finding: `card-spacing`; gaps vary slightly on large screens. |\n| Lead designer | No findings reported. |\n| Security engineer | No findings reported. |\n\nNo gating review findings are reported. The visual backlog item does not gate owner review.\n\n## Validation evidence and QA scope\n\nThe supplied author receipt reports a passing source-smoke check on this candidate. It is author evidence, separate from independent browser evidence; no Docker receipt was supplied.\n\nThe accepted independent browser receipt reports passing checks on this same commit for:\n\n- WEB-1: catalog filter.\n- WEB-2: keyboard and focus.\n- WEB-3: responsive layout.\n\nNo remaining browser validation is identified by the accepted evidence or project policy. The receipt does not specify browsers, viewport dimensions, or detailed scenarios, so it does not establish broader coverage.\n\nIf QA needs a further black-box pass, use commit `241abcde356f241abcde356f241abcde356f241a` and the three observable scopes listed above. This QA scope requires no author-test details or implementation guidance.\n\n## Deferred work and next owners\n\n- Engineering: normalize large-screen card spacing for `card-spacing`.\n- Visual reviewer: review spacing consistency after that change; QA should validate responsive behavior on the resulting candidate.\n- Project owner: review this candidate and decide whether to approve merge or release.\n\nNo external resources are required. No open questions or delivery blockers are identified in the pinned inputs."
+          }
+        ],
+        "decisions": [
+          "Use the exact candidate identified by all review and validation artifacts.",
+          "Treat card-spacing as non-gating deferred work under the accepted project policy.",
+          "Leave merge and release approval to the project owner; perform no rollout."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14599,
+        "output": 583,
+        "total": 15182,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 14758,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "owner-review-ready",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Candidate 241abcde356f241abcde356f241abcde356f241a is eligible for project-owner review; accepted evidence passes and only nonblocking spacing work remains.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "Recommend project-owner review of commit `241abcde356f241abcde356f241abcde356f241a`, based on `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, changing `public/catalog.html`.\n\nAll supplied receipts and reviews identify this exact candidate:\n\n- Author checks passed with source-smoke scope. This receipt alone does not establish browser behavior.\n- Accepted independent browser evidence passed WEB-1 catalog filter, WEB-2 keyboard and focus, and WEB-3 responsive layout.\n- Accepted UX, Lead Designer, and Security Engineer reviews report no findings.\n- Accepted Visual review reports one backlog finding: `card-spacing` — gaps vary slightly on large screens.\n\nDefer card-spacing consistency to the backlog; project policy explicitly makes backlog nonblocking for owner review. No remaining browser validation is identified for WEB-1, WEB-2, or WEB-3. The supplied browser receipt summarizes passing checks without detailed observations, so this recommendation is limited to its stated coverage and acceptance under project policy. No checks were executed during this delivery review.\n\nThe project owner alone decides approval, merge, or release. This handoff performs none of those actions, and rollout is outside this assignment."
+          }
+        ],
+        "decisions": [
+          "Advance the exact candidate to project-owner review based on accepted, passing candidate-matched evidence.",
+          "Keep card-spacing as nonblocking deferred work."
+        ],
+        "questions": [],
+        "blockers": [],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14137,
+        "output": 353,
+        "total": 14490,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 12577,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-failed-current-receipt",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared a QA packet with the exact candidate and independent verification scope. Candidate readiness remains on hold.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nCandidate commit: `123a456b789c123a456b789c123a456b789c123a`\nBase commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nStatus: HOLD pending SDM readiness clearance. This packet defines the independent QA scope; it does not certify candidate readiness or authorize release.\n\n## Independent black-box verification\n\nSource: accepted Product criteria CAT-1–CAT-3.\n\n| Criterion | Invocation | Required observable behavior |\n|---|---|---|\n| CAT-1 | `--list-pets` | Exits 0 and writes valid JSON to stdout. |\n| CAT-2 | No arguments | Exits 0 and prints `Hello`. |\n| CAT-3 | An unknown flag | Exits 2 and prints usage to stderr. |\n\nUse synthetic inputs only; no real customer data. Product has not specified the JSON schema, exact usage text, or the output stream for `Hello`; do not invent additional acceptance requirements.\n\nQA must verify the exact candidate commit independently and record the invocation, exit code, stdout, stderr, and criterion result. Keep QA evidence separate from author evidence. No checks were executed for this handoff.\n\n## Owners and dependencies\n\n- Engineering author: resolve the readiness gate and provide evidence tied to the candidate submitted for QA.\n- SDM: review candidate identity and required readiness evidence, then clear the handoff. If the commit changes, issue a revised packet naming that exact commit.\n- Independent QA: after clearance, verify CAT-1–CAT-3 through the public CLI and report results against the pinned commit.\n- Product: clarify unspecified output details only if they prevent a criterion from being assessed."
+          }
+        ],
+        "decisions": [
+          "Reviewed the supplied candidate metadata and author receipt as reference artifacts; no Git inspection or execution was performed.",
+          "The author receipt targets the candidate commit but reports failure. Its node-process scope does not establish Docker verification.",
+          "Kept author check details and implementation paths out of the independent QA packet."
+        ],
+        "questions": [],
+        "blockers": [
+          "Candidate readiness: the supplied author receipt reports a failed check.",
+          "Direct Git candidate inspection and a Docker author receipt are unavailable in the pinned inputs; readiness cannot be confirmed."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 12786,
+        "output": 634,
+        "total": 13420,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 112
+      },
+      "elapsedMs": 18136,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed",
+        "failure and recovery"
+      ]
+    },
+    {
+      "case": "qa-failed-current-receipt",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Independent QA handoff is blocked: the author check for the exact candidate failed.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nDisposition: blocked; do not begin independent QA until the author-check entry gate passes.\n\nCandidate: `123a456b789c123a456b789c123a456b789c123a`\n\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nChanged paths: `src/pets.mjs`, `test/pets.test.mjs`.\n\nScope: independently verify the CLI's externally observable behavior against the accepted Product criteria using no real customer data. The supplied author receipt matches this candidate but does not pass. No independent checks were executed for this handoff.\n\n## Independent verification scope\n\n| Criterion | Invocation/input | Required observable result |\n| --- | --- | --- |\n| CAT-1 | CLI with `--list-pets` | Exit code 0; stdout contains valid JSON. The accepted criterion does not specify stderr behavior or a JSON schema. |\n| CAT-2 | CLI with no arguments | Exit code 0; prints `Hello`. Product has not specified the output stream or exact whitespace. Record stdout and stderr separately. |\n| CAT-3 | CLI with an unknown flag | Exit code 2; usage appears on stderr. Record stdout separately; its required contents are unspecified. |\n\nThe executable entry point is not supplied. Before execution, obtain the supported CLI command from the build owner and record the full invocation for each criterion without changing the specified arguments.\n\nFor each criterion, QA must record the exact tested commit, invocation, exit code, stdout, stderr, and pass/fail conclusion. Independent QA should derive its own checks from these criteria.\n\n## Resume condition\n\nThe build owner must resolve the author-check failure and supply the proposed candidate commit with a fresh passing author-check receipt tied to that exact commit. SDM must re-evaluate the entry gate and update this packet if the candidate changes. QA may prepare criterion-based verification while execution remains gated.\n\nThis packet grants no project-owner approval, merge, or release authority."
+          }
+        ],
+        "decisions": [
+          "The supplied receipt matches the exact candidate, but its failed outcome blocks advancement to independent QA.",
+          "Route the failure to the build-catalog owner; no fix allowance is supplied, so this handoff does not authorize an additional implementation attempt."
+        ],
+        "questions": [
+          "Build owner: what supported executable command invokes this CLI?",
+          "If another build attempt requires approval under the run policy, the project owner must authorize that attempt before implementation resumes."
+        ],
+        "blockers": [
+          "Build-catalog owner: check author-cli failed on candidate 123a456b789c123a456b789c123a456b789c123a with exit code 2 and observed symptom 'catalog default invocation changed'. Resolve the failure within the permitted run policy and rerun author checks on the proposed candidate before QA begins."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14836,
+        "output": 718,
+        "total": 15554,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 47
+      },
+      "elapsedMs": 17267,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "qa-failed-current-receipt",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Prepared the independent QA packet. Candidate readiness remains on hold because the supplied author receipt reports failure and does not establish Docker validation.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA\n\nCandidate identifier supplied by the runner: `123a456b789c123a456b789c123a456b789c123a`\nBase supplied by the runner: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\nStatus: proposed verification scope; SDM clearance is pending. These identifiers come from the supplied artifact and have not been verified against Git. No independent checks have been executed.\n\n## Independent black-box scope\n\nQA owns verification of the exact candidate against the accepted Product criteria:\n\n| Criterion | Invocation | Required observable behavior |\n| --- | --- | --- |\n| CAT-1 | `--list-pets` | Exits 0 and emits valid JSON on stdout. |\n| CAT-2 | No arguments | Exits 0 and prints `Hello`. |\n| CAT-3 | An unknown flag | Exits 2 and prints usage to stderr. |\n\nUse synthetic inputs only; no real customer data. Product has not specified a JSON schema, exact usage wording, or the output stream for `Hello`; do not invent additional acceptance requirements.\n\nQA should record the resolved candidate commit, invocation, exit status, stdout, stderr, and criterion verdict for each check. Report any inability to resolve or run the exact candidate as a verification blocker. Independent acceptance requires all three criteria to pass.\n\n## Ownership and next steps\n\n- SDM: resolve candidate identity and readiness evidence before clearing execution.\n- Engineering: provide a runnable entry point and corrected readiness evidence tied to the exact candidate.\n- QA: after clearance, execute the black-box scope and return evidence and verdicts independently."
+          }
+        ],
+        "decisions": [
+          "Reviewed the supplied candidate metadata and author receipt as reference data only; no repository inspection or command execution occurred.",
+          "The receipt names the same candidate identifier but reports passed=false. It describes node-process checks, so it does not establish the requested Docker author validation.",
+          "Kept author test specifics, changed paths, and implementation details out of the QA packet."
+        ],
+        "questions": [],
+        "blockers": [
+          "Candidate readiness: the supplied author receipt reports a failed check; Engineering must resolve the failure and provide updated evidence.",
+          "Docker author validation evidence is missing.",
+          "Git candidate identity and runnable entry point cannot be verified from the supplied artifacts; repository and execution access are unavailable in this assignment."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 12782,
+        "output": 648,
+        "total": 13430,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 110
+      },
+      "elapsedMs": 18122,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed",
+        "failure and recovery"
+      ]
+    },
+    {
+      "case": "qa-failed-current-receipt",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Candidate 123a456b789c123a456b789c123a456b789c123a cannot advance to independent QA because its required author check failed.",
+        "outputs": [
+          {
+            "slot": "qa-packet",
+            "content": "# Candidate handoff to QA — blocked\n\nCandidate: `123a456b789c123a456b789c123a456b789c123a`\nBase: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\nScope: catalog CLI behavior for CAT-1, CAT-2, and CAT-3. Use no real customer data.\n\nIndependent QA must not begin until the build owner supplies a passing author-check receipt for the proposed candidate and SDM clears the handoff. The supplied receipt matches this candidate but reports failure. No checks were executed for this review.\n\n## Independent black-box verification scope\n\nThe executable invocation must be supplied by the build owner; `<catalog-command>` below is a placeholder, not an approved command.\n\n| Criterion | Invocation | Required observable result |\n| --- | --- | --- |\n| CAT-1 | `<catalog-command> --list-pets` | Exit 0; stdout contains JSON. Product has not specified a JSON schema or stderr expectation. |\n| CAT-2 | `<catalog-command>` with no arguments | Exit 0; prints `Hello`. Product has not specified the output stream, exact whitespace, or stderr expectation. |\n| CAT-3 | `<catalog-command> <unknown-flag>` | Exit 2; usage appears on stderr. Product has not specified exact usage text or stdout expectations. |\n\nQA should independently select an unsupported flag and record each actual invocation, exit code, stdout, and stderr against the candidate it verifies. Unspecified output details must not become invented acceptance requirements.\n\n## Resume condition\n\nThe build owner must resolve the author-check failure within the applicable fix allowance and provide a fresh passing receipt tied to the proposed candidate. If repair is outside that allowance, the project owner must authorize further work. SDM must review that candidate and receipt before issuing an eligible QA handoff. Any replacement commit must be named explicitly; this packet does not authorize advancing it."
+          }
+        ],
+        "decisions": [
+          "The matching author receipt is current for the pinned candidate, but its failed result blocks QA entry.",
+          "Independent QA scope preserves all three accepted Product criterion IDs without importing author test cases or implementation details.",
+          "No approval, merge, or release is authorized by this review."
+        ],
+        "questions": [
+          "Build owner: what is the supported executable invocation for the catalog CLI?",
+          "Project owner or runner: what repair allowance remains for this candidate? The assignment attempt budget does not establish that authority."
+        ],
+        "blockers": [
+          "Build owner: required check author-cli failed on 123a456b789c123a456b789c123a456b789c123a with exit code 2; the receipt reports that the catalog default invocation changed. Fix the failure and rerun author checks on the proposed candidate before QA begins, subject to the run policy."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13581,
+        "output": 690,
+        "total": 14271,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 51
+      },
+      "elapsedMs": 16633,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "exhausted-loop",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Delivery review complete. The prototype is blocked from release by an unresolved security finding; further work requires project-owner authorization and SDM budget resolution.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\nThe prototype is not approved for release. The accepted security review records an unresolved blocker, and no waiver or approval exists.\n\n## Exact candidate\n\n- Commit: `241abcde356f241abcde356f241abcde356f241a`\n- Base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n- Changed path: `public/catalog.html`\n\nThese identifiers come from the pinned candidate artifact. No Git inspection, execution, or browser validation was performed for this delivery review.\n\n## Accepted review outcomes\n\nAll four review artifacts identify the exact candidate commit above.\n\n| Review | Recorded outcome |\n| --- | --- |\n| UX implementation | No findings recorded. |\n| Visual implementation | No findings recorded. |\n| Lead designer | No findings recorded. |\n| Security engineer | Blocker `external-tracker`: “Personal data is sent to an unapproved endpoint.” Evidence: “Preview sends the visitor ID to an external host.” |\n\nThe supplied author receipt reports a passing `source-smoke` check for this commit. That is author-reported evidence, not independent browser validation, and cannot override the security blocker. No Docker receipt is supplied.\n\n## Disposition and remaining work\n\nThe security blocker remains required work, not accepted deferred scope. The candidate has exhausted its only permitted fix loop, the spend limit is reached, and no further implementation work is authorized.\n\n| Owner | Next step | Dependency |\n| --- | --- | --- |\n| Project owner | Decide and authorize the next scope or disposition. | No existing waiver or approval. |\n| SDM, as cost owner | Resolve budget authorization before routing additional work. | Spend limit reached. |\n| Engineering | Address the unapproved visitor-ID transmission and produce a new exact candidate. | Project-owner authorization and budget resolution. |\n| Security engineer | Independently review the resulting candidate and resolve `external-tracker`. | Authorized remediation and replacement candidate. |\n| QA | Perform independent browser validation against the authorized exact candidate. | Security resolution and authorization to proceed. |\n\nNo other deferred features or backlog items are specified in the pinned inputs. WEB-1, WEB-2, and WEB-3 are named, but their definitions and browser acceptance evidence are absent; fulfillment cannot be established from this packet.\n\n## QA black-box handoff\n\nReference candidate: `241abcde356f241abcde356f241abcde356f241a`, page `public/catalog.html`. Release remains blocked. If remediation produces a new commit, replace this reference before validation.\n\nRemaining browser scope: verify that visiting and interacting with the page does not transmit visitor identifiers to an unapproved external endpoint; validate page rendering, responsive behavior, keyboard access, and exposed interaction states against the accepted design and WEB-1–WEB-3 requirements once those specifications are supplied. Record browser versions, viewport sizes, exact candidate, observed results, and network evidence. Browser coverage and results are currently unverified."
+          }
+        ],
+        "decisions": [
+          "Hold release because the accepted security review contains an unresolved blocker.",
+          "Do not initiate another fix loop: none remain, the spend limit is reached, and further work has no authorization.",
+          "Keep author check details separate from the QA black-box handoff."
+        ],
+        "questions": [
+          "What next scope or disposition does the project owner authorize, and how will SDM resolve the reached spend limit?",
+          "Where are the definitions of WEB-1–WEB-3 and accepted design specifications needed for browser acceptance?"
+        ],
+        "blockers": [
+          "Security finding external-tracker: the preview sends the visitor ID to an unapproved external host.",
+          "No permitted fix loops or spend capacity remain; further work requires authorization.",
+          "Independent browser validation evidence and detailed acceptance specifications are missing."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 13252,
+        "output": 879,
+        "total": 14131,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 20482,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed"
+      ]
+    },
+    {
+      "case": "exhausted-loop",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Project-owner handoff is blocked by a security finding on the exact candidate. No fix loops remain, and the spend limit is reached; further work requires project-owner authorization and SDM budget resolution.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\n**Disposition: blocked.** Candidate `241abcde356f241abcde356f241abcde356f241a` cannot advance for approval with the unresolved security blocker. Escalate the decision to the project owner; this packet does not approve, merge, or release the prototype.\n\n## Candidate and evidence\n\n- Candidate: `241abcde356f241abcde356f241abcde356f241a`.\n- Base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.\n- Changed path: `public/catalog.html`.\n- The supplied author receipt identifies this exact candidate and reports a passing `source-smoke` check. Its scope does not establish browser behavior or resolve security findings.\n- Accepted UX, Visual, and Lead Designer reviews identify this exact candidate and report no findings. These records do not establish browser validation or project-owner approval.\n- The accepted Security Engineer review identifies this exact candidate and reports blocker `external-tracker`: “Personal data is sent to an unapproved endpoint.” Its recorded evidence states that the preview sends the visitor ID to an external host.\n\nThese conclusions summarize the supplied records; no checks were executed for this delivery review.\n\n## Blocking decision and ownership\n\nThe security finding prevents advancement. The run policy states that the only permitted fix loop has already been used, zero remain, the spend limit is reached, and no waiver or approval exists. A passing author smoke check cannot override this finding.\n\nThe project owner must decide whether to authorize further remediation work and its scope. SDM, as cost owner, must resolve the exhausted budget before additional work proceeds. No further fix attempt is assigned under the current authority.\n\nIf further work is authorized, the build owner must address the unapproved personal-data transmission. Any replacement candidate must have fresh passing author checks, a Security Engineer review resolving this blocker, and relevant implementation reviews tied to that exact commit before another delivery decision.\n\n## Criteria and remaining validation\n\nWEB-1, WEB-2, and WEB-3 remain in scope, but their approved definitions and observable acceptance results are absent from this packet. Compliance with these criteria cannot be established from the supplied records. Product must provide the approved definitions for independent QA to map each ID to observable pass/fail evidence.\n\nIndependent browser validation is not evidenced. Following authorization and resolution of the entry gates, independent QA must validate the replacement candidate against WEB-1, WEB-2, and WEB-3 and verify that the preview no longer sends visitor data to an unapproved host. Author source-smoke results do not substitute for this work.\n\n## Deferred work and backlog\n\nNo optional backlog items are recorded in the accepted reviews. The security blocker is unresolved required work, not an accepted deferral or residual risk. Browser validation and criterion-level acceptance evidence remain outstanding. Approval, merge, and release remain separate project decisions."
+          }
+        ],
+        "decisions": [
+          "Block advancement of candidate 241abcde356f241abcde356f241abcde356f241a because security blocker external-tracker remains unresolved.",
+          "Escalate further-work authorization to the project owner and budget resolution to SDM; do not initiate another fix loop under the exhausted allowance."
+        ],
+        "questions": [
+          "Will the project owner authorize additional remediation scope, with SDM resolving the exhausted spend limit?",
+          "Can Product supply the approved definitions and observable acceptance expectations for WEB-1, WEB-2, and WEB-3?"
+        ],
+        "blockers": [
+          "Security Engineer finding external-tracker reports visitor-ID transmission to an unapproved external host on the exact candidate.",
+          "Zero fix loops remain, the spend limit is reached, and no authorization or waiver exists.",
+          "Independent browser validation and criterion-level acceptance evidence are not supplied."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 15302,
+        "output": 923,
+        "total": 16225,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 45
+      },
+      "elapsedMs": 22868,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "exhausted-loop",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Delivery review completed. The prototype is not approved for release because an unresolved security blocker remains and no further fix loop is authorized.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\n**Disposition: hold release.** The review summary is complete; the candidate is not approved for delivery to users.\n\n## Exact candidate\n\n- Commit: `241abcde356f241abcde356f241abcde356f241a`\n- Base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n- Reported changed path: `public/catalog.html`\n\nThese identifiers come from the pinned candidate artifact. No repository inspection, execution, or browser validation was performed for this assignment.\n\n## Accepted review outcomes\n\nAll four review artifacts identify the exact candidate above.\n\n| Review source | Recorded outcome |\n| --- | --- |\n| UX implementation review | No findings reported. |\n| Visual implementation review | No findings reported. |\n| Lead Designer review | No findings reported. |\n| Security Engineer review | Unresolved blocker `external-tracker`: personal data is sent to an unapproved endpoint. Evidence states that the preview sends the visitor ID to an external host. |\n\nEmpty findings lists do not establish browser coverage or override the security blocker. The security artifact does not identify the external hostname.\n\n## Internal author evidence\n\nThe pinned author receipt reports a passing `source-smoke` result for the exact candidate commit. It provides no Docker execution evidence or independent browser-validation receipt. This reported author result cannot override the security finding. No checks were executed during this review.\n\n## Remaining work and ownership\n\n| Item | Owner | Dependency and disposition |\n| --- | --- | --- |\n| Decide whether to authorize further work or change scope | Project owner | Required before additional implementation. The only permitted fix loop has been used; zero remain, and no waiver or approval exists. |\n| Resolve funding for any further work | SDM, cost owner | Spend limit is reached. No additional spend is authorized by this review. |\n| Address `external-tracker` | Engineering, after authorization | Release-blocking work; cannot be treated as an accepted deferral. Any authorized change requires a new exact candidate and renewed review. |\n| Reassess the security blocker | Security Engineer | Depends on an authorized revised candidate and evidence that the unapproved disclosure is resolved. |\n| Complete independent browser validation | QA | Pending authorized validation capacity and a safe preview environment. No browser-validation results are supplied. |\n\nNo other deferred feature work is identified in the pinned artifacts. Detailed accepted design specifications, interaction inventory, target browsers, and viewport requirements are not supplied; coverage cannot be inferred from empty review findings.\n\n## QA packet — black-box scope\n\nCandidate reference: `241abcde356f241abcde356f241abcde356f241a`. Status: **held; this packet does not authorize execution or release**. If remediation changes the candidate, replace this reference before QA begins.\n\nAfter authorization and confirmation of a safe preview environment, QA should validate observable page rendering and available interactions against the accepted requirements, responsive behavior across agreed viewports, keyboard operation and visible focus, and browser console/network behavior. Specifically verify that opening and using the preview does not disclose a visitor ID to an unapproved host. Record the exact tested commit, browsers, viewports, results, and remaining defects. Confirm the missing requirements and browser matrix before claiming complete coverage.\n\n## Owner decision required\n\nThe project owner must decide the authorized path forward, with SDM resolving the exhausted spend limit. Until then, the candidate remains held. No external resource creation or provisioning is required by the supplied evidence."
+          }
+        ],
+        "decisions": [
+          "Hold release of the exact candidate because security blocker external-tracker remains unresolved.",
+          "Do not infer release approval or browser validation from empty review findings or the passing author smoke receipt.",
+          "Do not initiate another fix loop or additional spend without the required owner authorization."
+        ],
+        "questions": [
+          "Will the project owner authorize further remediation or a scope change, and how will SDM resolve the exhausted spend limit?",
+          "What accepted requirements, browser matrix, and safe preview environment should govern the remaining independent QA?"
+        ],
+        "blockers": [
+          "Security finding external-tracker reports visitor-ID disclosure to an unapproved external host.",
+          "Zero permitted fix loops remain, the spend limit is reached, and no waiver or further-work approval exists.",
+          "Independent browser-validation evidence and Docker execution evidence are not supplied."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 14505,
+        "output": 992,
+        "total": 15497,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 50
+      },
+      "elapsedMs": 23576,
+      "pass": false,
+      "issues": [
+        "Expected blocked; got completed"
+      ]
+    },
+    {
+      "case": "exhausted-loop",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "blocked",
+        "summary": "Project-owner handoff is blocked by a security finding on the exact candidate. No fix loops remain, and the spend limit is reached.",
+        "outputs": [
+          {
+            "slot": "delivery",
+            "content": "# Website delivery notes\n\n**Disposition: blocked.** Candidate `241abcde356f241abcde356f241abcde356f241a` cannot advance for delivery approval while the security blocker remains unresolved.\n\nCandidate base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Changed path: `public/catalog.html`.\n\n## Evidence and accepted reviews\n\nAll supplied reviews and the author receipt identify this exact candidate.\n\n- Author receipt: passing, limited to `source-smoke`. This does not establish browser behavior or resolve the security finding.\n- UX implementation review: no findings recorded.\n- Visual implementation review: no findings recorded.\n- Lead designer review: no findings recorded.\n- Security engineer review: blocker `external-tracker`, “Personal data is sent to an unapproved endpoint.” Recorded evidence: preview sends the visitor ID to an external host.\n\nThese are supplied records; no checks were executed for this delivery review. Acceptance of the security review does not constitute acceptance of its reported risk.\n\n## Required project-owner decision\n\nThe candidate has exhausted its only permitted fix loop, and the SDM spend limit is reached. No waiver or approval exists. Escalate to the project owner to decide scope and authorize further work, with an explicit funding decision before additional work begins. The team is not authorized to start another fix loop.\n\nIf further work is authorized, route the external-tracker finding to the build owner for a narrowly scoped correction. Before a replacement candidate advances, require fresh passing author checks and security review tied to its exact commit, plus relevant implementation reviews and independent browser validation. A smoke pass cannot override this blocker.\n\n## Deferred work and validation\n\n- Security remediation remains blocked pending the project-owner decision; it is not an accepted backlog risk.\n- Browser validation remains outstanding. No independent browser evidence is supplied for WEB-1, WEB-2, or WEB-3.\n- Criterion definitions and observable acceptance results are absent from this packet. Preserve these IDs and obtain their approved definitions before preparing criterion-specific independent QA checks; no criterion-level pass is asserted.\n- No other backlog findings are recorded in the supplied reviews.\n\nThis report escalates the blocked candidate for a decision only. It does not authorize approval, merge, release, or additional implementation spending."
+          }
+        ],
+        "decisions": [
+          "Do not advance the candidate for delivery approval while security blocker external-tracker remains unresolved.",
+          "Escalate further scope, work authorization, and funding to the project owner because the fix allowance and spend limit are exhausted."
+        ],
+        "questions": [
+          "Will the project owner authorize and fund further work to resolve external-tracker?",
+          "What are the approved observable acceptance definitions for WEB-1, WEB-2, and WEB-3?"
+        ],
+        "blockers": [
+          "Security finding external-tracker on candidate 241abcde356f241abcde356f241abcde356f241a reports visitor ID transmission to an unapproved external host.",
+          "No fix loops remain; the spend limit is reached and no further authorization or waiver exists.",
+          "Independent browser validation and criterion-level acceptance evidence are not supplied."
+        ],
+        "resourceRequests": []
+      },
+      "usage": {
+        "input": 15306,
+        "output": 753,
+        "total": 16059,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 62
+      },
+      "elapsedMs": 18849,
+      "pass": true,
+      "issues": []
+    }
+  ]
+}

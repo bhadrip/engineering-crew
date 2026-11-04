@@ -16,7 +16,7 @@
       ]
     },
     "reports": [
-      "evals/security-engineer/shared-runner.json"
+      "evals/security-engineer/resource-runtime.json"
     ]
   },
   "sdm": {
@@ -41,7 +41,7 @@
       ]
     },
     "reports": [
-      "evals/sdm/accepted.json"
+      "evals/sdm/resource-runtime.json"
     ]
   },
   "lead-engineer": {
@@ -63,7 +63,7 @@
       ]
     },
     "reports": [
-      "evals/lead-engineer/accepted.json"
+      "evals/lead-engineer/resource-runtime.json"
     ]
   }
 }
