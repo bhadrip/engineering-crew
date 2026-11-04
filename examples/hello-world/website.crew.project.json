@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "id": "pet-store",
+  "name": "Pet Store",
+  "crewName": "Beaver Crew",
+  "costOwner": "SDM",
+  "runtime": {
+    "kind": "codex"
+  },
+  "epic": {
+    "id": "epic-2",
+    "title": "Plan the catalog website",
+    "goal": "Prepare a Pet Store website plan informed by UX and visual design reviews."
+  },
+  "inputs": [
+    {
+      "id": "brief",
+      "title": "Catalog website brief",
+      "path": "examples/hello-world/pet-store-website-brief.md"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "ux-designer",
+      "revision": 1,
+      "name": "UX Designer",
+      "remit": "Review visitor flows, interaction states, and accessibility.",
+      "instructions": "examples/hello-world/crew/ux-designer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "visual-designer",
+      "revision": 1,
+      "name": "Visual Designer",
+      "remit": "Review visual hierarchy, typography, color, and responsive layout.",
+      "instructions": "examples/hello-world/crew/visual-designer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "sdm",
+      "revision": 2,
+      "name": "Software Development Manager",
+      "remit": "Agree the plan, route work, and hand the candidate to QA.",
+      "instructions": "examples/hello-world/crew/sdm.md",
+      "skills": [],
+      "tools": []
+    }
+  ],
+  "tasks": [
+    {
+      "id": "ux-review",
+      "revision": 1,
+      "title": "UX review",
+      "profileId": "ux-designer",
+      "objective": "Review the draft catalog page for visitor flow, filter behavior, accessibility, and catalog states.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [],
+      "inputs": [
+        "brief"
+      ],
+      "handoffInputs": [],
+      "outputs": [
+        {
+          "id": "ux-spec",
+          "title": "UX recommendations",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Specify the browse and filter flow (WEB-1), keyboard and focus behavior, and observable states (WEB-2)."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-website-brief.md"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "visual-review",
+      "revision": 1,
+      "title": "Visual design review",
+      "profileId": "visual-designer",
+      "objective": "Review how the draft catalog should look and adapt across screen sizes.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [],
+      "inputs": [
+        "brief"
+      ],
+      "handoffInputs": [],
+      "outputs": [
+        {
+          "id": "visual-spec",
+          "title": "Visual design direction",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Provide concrete typography, spacing, color, and responsive layout recommendations with visual checks (WEB-3)."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-website-brief.md"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "website-plan",
+      "revision": 1,
+      "title": "SDM website plan",
+      "profileId": "sdm",
+      "objective": "Combine accepted UX and visual recommendations into a scoped engineering plan. Identify decisions still open and how QA can verify the work.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "ux-review",
+        "visual-review"
+      ],
+      "inputs": [
+        "brief"
+      ],
+      "handoffInputs": [
+        {
+          "task": "ux-review",
+          "slot": "ux-spec"
+        },
+        {
+          "task": "visual-review",
+          "slot": "visual-spec"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "build-plan",
+          "title": "Website implementation plan",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Reconcile both design inputs, assign work and dependencies, and specify observable checks for WEB-1 through WEB-3."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-website-brief.md"
+        ]
+      },
+      "acceptedBy": "Project owner"
+    }
+  ]
+}

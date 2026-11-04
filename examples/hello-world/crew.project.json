@@ -3,6 +3,7 @@
   "id": "pet-store",
   "name": "Pet Store",
   "crewName": "Beaver Crew",
+  "costOwner": "SDM",
   "epic": {
     "id": "epic-1",
     "title": "Epic 1 · List the available pets",
@@ -54,7 +55,7 @@
     },
     {
       "id": "sdm",
-      "revision": 1,
+      "revision": 2,
       "name": "Software Development Manager",
       "remit": "Agree the plan, route work, and hand the candidate to QA.",
       "instructions": "examples/hello-world/crew/sdm.md",

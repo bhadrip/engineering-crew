@@ -26,7 +26,7 @@ async function fixture(t) {
   const record = artifact('receipt-1', 'Codex execution receipt', 'json', JSON.stringify(receipt), { source: 'runtime', attemptId });
   const attempt = { id: attemptId, number: 1, outcome: 'completed', receiptId: record.id,
     startedAt: '2026-11-04T07:49:48.743Z', endedAt: '2026-11-04T07:50:05.629Z' };
-  const task = { packet: { id: 'review', profileId: 'product' }, attempts: [attempt] };
+  const task = { packet: { id: 'review', profileId: 'product', budget: { targetTotalTokens: 100 } }, attempts: [attempt] };
   run.tasks.push(task);
   run.artifacts.push(record);
   const store = runStore(gitDir, run.id);

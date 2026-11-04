@@ -137,6 +137,8 @@ then accepts the handoff or requests rework. A `completed` response cannot
 advance the next task until acceptance. Retrying the same packet creates a new
 attempt. Changing inputs, scope, permissions, or budget creates a new packet
 revision. Downstream work consumes the explicitly accepted attempt's outputs.
+The consumer records the producer task, slot, attempt, artifact ID, and
+digest. The next attempt receives the operator's recorded rework note.
 
 **Budgets.** Each packet sets a total token target per attempt, a wall clock
 deadline, and a maximum number of attempts for that packet revision. The token
@@ -146,7 +148,10 @@ reported usage, flags overruns, and leaves missing usage unknown. The target
 guides the assignment and the SDM's decision to retry. V1 enforces the deadline
 by stopping the attempt and records any partial evidence. A retry needs an SDM
 decision and cannot exceed the packet's attempt limit. A project policy that
-requires a hard token cutoff needs an executor that can enforce it.
+requires a hard token cutoff needs an executor that can enforce it. Every new
+task has a resolved cost owner, which can be assigned per task or inherited
+from the project or decision owner. Optional model-specific rates give that
+owner an estimated USD total across all attempts. The USD target is advisory.
 
 **Permissions.** Name the repository, revision, workspace, read/write scopes,
 tool capabilities, tool network policy, and allowed external actions. The
