@@ -64,7 +64,7 @@
     },
     {
       "id": "engineer",
-      "revision": 1,
+      "revision": 2,
       "name": "Software Engineer",
       "remit": "Return scoped implementation and author tests.",
       "instructions": "examples/hello-world/crew/engineer.md",

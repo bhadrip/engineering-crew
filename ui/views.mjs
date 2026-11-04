@@ -1,3 +1,4 @@
+import { currentAttempt, currentAttempts } from '../lib/attempts.mjs';
 import { verifiedTraceLink } from '../lib/langfuse.mjs';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,6 +17,9 @@ function status(attempt) {
   }
   if (attempt.result?.state === 'completed' && attempt.evidenceStatus === 'missing') {
     return ['Evidence incomplete', 'A required output or execution receipt is missing or no longer matches the record.', 'warning'];
+  }
+  if (!attempt.decision && attempt.reviewFindings?.some(finding => finding.severity === 'blocker')) {
+    return ['Implementation blocked', 'Review the findings and decide whether to request a fix loop.', 'warning'];
   }
   if (attempt.decision?.disposition === 'accepted') return ['Handoff accepted', attempt.decision.note, 'success'];
   if (attempt.decision?.disposition === 'rework') return ['Rework requested', attempt.decision.note, 'warning'];
@@ -61,6 +65,7 @@ function runState(run) {
   if (attention) return ['attention', 'Needs attention', 'warning'];
   if (running) return ['running', 'In progress', 'active'];
   if (review) return ['review', 'Handoff ready for review', 'active'];
+  if (run.fix && accepted && accepted < run.handoffs.total) return ['running', 'In progress', 'active'];
   if (accepted) return ['accepted', 'Handoffs accepted', 'success'];
   return ['queued', 'Ready to start', 'neutral'];
 }
@@ -75,11 +80,11 @@ function epicCode(epic) {
 
 function waitingOn(run, task) {
   return task.packet.prerequisites.map(id => run.tasks.find(item => item.packet.id === id))
-    .filter(item => status(item.attempts.at(-1))[2] !== 'success');
+    .filter(item => status(currentAttempt(item))[2] !== 'success');
 }
 
 function taskStatus(run, task) {
-  const latest = task.attempts.at(-1);
+  const latest = currentAttempt(task);
   const waiting = waitingOn(run, task);
   return !latest && waiting.length
     ? ['Waiting on handoffs', `Waiting for ${waiting.map(item => item.packet.title).join(', ')}.`, 'neutral']
@@ -94,14 +99,29 @@ function projectHeader(project, current) {
 <a href="${path}/agents"${current === 'agents' ? ' aria-current="page"' : ''}>${escape(project.crewName)}</a></nav></div></header>`;
 }
 
-export function projectPage(project, showAgents = false, { query = '', status: filter } = {}) {
+export function projectPage(project, showAgents = false, { query = '', status: filter, configurations = [] } = {}) {
   const path = projectHref(project);
   const agents = `<ul class="index-list">${project.profiles.map(profile => `<li>
 <a href="${artifactHref(profile.configurationRun ?? project.configurationRun, profile.instructionId)}?view=agents">${escape(profile.name)}</a>
 <p>${escape(profile.remit)}</p></li>`).join('')}</ul>`;
   if (showAgents) {
     return layout(`${project.name} · Agents`, `${projectHeader(project, 'agents')}<main>
-<h1>${escape(project.crewName)}</h1><section class="record-section"><h2>Configured agents</h2>${agents}</section></main>`);
+<h1>${escape(project.crewName)}</h1>
+<section class="record-section"><h2>Orchestration settings</h2>
+<p class="muted">Edit the project configuration in Git and start a new run to apply changes.</p>
+<ul class="index-list">${configurations.map(config => {
+    const { epic, project: settings } = config;
+    const policy = settings?.orchestration;
+    const latest = epic.runs[0];
+    const title = taskId => settings.tasks.find(task => task.id === taskId)?.title ?? taskId;
+    return `<li><a href="${epicHref(project, epic)}">${escape(epicName(epic))}</a>
+${config.error ? `<p>${escape(config.error)}</p>` : `<p><code>${escape(config.path)}</code> · ${escape(config.sourceCommit.slice(0, 12))}</p>
+${policy ? `<p>${escape(title(policy.buildTask))} → ${policy.reviewTasks.map(id => escape(title(id))).join(' + ')}</p>
+<p>${policy.maxFixLoops} maximum fix ${policy.maxFixLoops === 1 ? 'loop' : 'loops'} · Decision owner ${escape(policy.decisionOwner)}</p>`
+    : '<p>No implementation reviews configured.</p>'}`}
+<p><a href="${artifactHref(latest.id, 'project-config')}?view=agents">View the latest run’s pinned configuration</a></p></li>`;
+  }).join('')}</ul></section>
+<section class="record-section"><h2>Configured agents</h2>${agents}</section></main>`);
   }
   const selected = Object.hasOwn(stateLabels, filter) ? filter : 'all';
   const entries = project.epics.filter(epic => {
@@ -140,11 +160,12 @@ function activityLabel(title, action) {
 
 export function epicPage(project, epic, run, { step, view, query = '', type } = {}) {
   const tabs = { overview: 'Overview', workflow: 'Workflow',
+    ...(run.fix ? { reviews: 'Reviews' } : {}),
     ...(run.tasks.some(task => task.packet.execution) ? { checks: 'Checks' } : {}), usage: 'Usage', activity: 'Activity' };
   const selected = Object.hasOwn(tabs, view) || view === 'search' ? view : step ? 'workflow' : 'overview';
   const [, label, tone] = runState(run);
   const content = selected === 'workflow' ? pipelinePanel(run, step) : selected === 'checks' ? checksPanel(run)
-    : selected === 'usage' ? usagePanel(run) : selected === 'activity' ? activityPanel(run)
+    : selected === 'reviews' ? reviewsPanel(run) : selected === 'usage' ? usagePanel(run) : selected === 'activity' ? activityPanel(run)
       : selected === 'search' ? searchPanel(run, query, type) : overviewPanel(run, epic);
   return layout(`${epicName(epic)} · ${project.name}`, `${projectHeader(project)}<main data-epic-view>
 <nav class="breadcrumbs" aria-label="Location"><a href="${projectHref(project)}">Epics</a><span aria-hidden="true">/</span><span>${escape(epicCode(epic))}</span></nav>
@@ -158,13 +179,16 @@ export function epicPage(project, epic, run, { step, view, query = '', type } = 
 }
 
 function activityEvents(run) {
-  const events = [];
+  const events = (run.fixLoops ?? []).map(loop => ({
+    title: `Fix loop ${loop.number} requested`, at: loop.recordedAt, detail: loop.note, tone: 'warning', key: true,
+    href: epicViewHref(run, 'reviews'),
+  }));
   for (const task of run.tasks) {
     const { packet } = task;
     const profile = run.profiles.find(value => value.id === packet.profileId);
     for (const attempt of task.attempts) {
       const href = `${taskHref(run.id, packet.id)}#attempt-${attempt.number}`;
-      const latest = attempt === task.attempts.at(-1);
+      const latest = attempt === currentAttempt(task);
       if (attempt.startedAt) events.push({ title: activityLabel(packet.title, 'started'), at: attempt.startedAt,
         detail: profile.name, href, tone: 'neutral', key: latest && attempt.outcome === 'running' });
       if (attempt.verification) {
@@ -202,9 +226,9 @@ function activityPanel(run) {
 }
 
 function overviewPanel(run, epic) {
-  const build = run.tasks.find(task => task.packet.execution?.kind === 'build')?.attempts.at(-1);
+  const build = currentAttempt(run.tasks.find(task => task.packet.execution?.kind === 'build'));
   const qaTask = run.tasks.find(task => task.packet.execution?.kind === 'verify');
-  const qa = qaTask?.attempts.at(-1)?.verification;
+  const qa = currentAttempt(qaTask)?.verification;
   const brief = run.artifacts.find(artifact => artifact.id === 'input-brief');
   const candidate = build?.candidate;
   const diff = build?.runnerArtifacts?.['candidate-diff'];
@@ -241,10 +265,41 @@ function usagePanel(run) {
 ${usage.attemptsMissingUsage ? `<p>Missing token usage from ${usage.attemptsMissingUsage} ${usage.attemptsMissingUsage === 1 ? 'attempt' : 'attempts'}.</p>` : ''}</li>`).join('')}</ul></section>`;
 }
 
+function findingsList(findings) {
+  return `<ul class="index-list">${findings.map(finding => `<li>
+<strong>${escape(finding.title)}</strong><p>${escape(finding.evidence)}</p></li>`).join('')}</ul>`;
+}
+
+function reviewsPanel(run) {
+  const { fix, orchestration } = run;
+  const build = currentAttempt(run.tasks.find(task => task.packet.id === orchestration.buildTask));
+  return `<section class="record-section"><div class="section-title"><h2>Implementation reviews</h2>
+<p>${fix.used} of ${fix.limit} fix loops used</p></div>
+<p class="muted">Decision owner ${escape(orchestration.decisionOwner)}${build?.candidate ? ` · Candidate <code>${escape(build.candidate.commit.slice(0, 12))}</code>` : ''}</p>
+<ul class="index-list">${orchestration.reviewTasks.map(id => {
+    const task = run.tasks.find(task => task.packet.id === id);
+    const [verdict] = taskStatus(run, task);
+    const blockers = currentAttempt(task)?.reviewFindings?.filter(finding => finding.severity === 'blocker') ?? [];
+    return `<li><a href="${taskHref(run.id, id)}">${escape(task.packet.title)}</a><p>${escape(verdict)}</p>
+${blockers.length ? findingsList(blockers) : ''}</li>`;
+  }).join('')}</ul>
+${fix.canRequest ? `<form class="decision" method="post" action="${runHref(run.id)}/fix">
+<input type="hidden" name="attempt" value="${escape(fix.buildAttemptId)}">
+<label for="fix-note">Fix loop reason</label><textarea id="fix-note" name="note" rows="2" required maxlength="2000"></textarea>
+<p class="muted">This reopens the build and its downstream reviews for a replacement candidate. Earlier attempts stay in history.</p>
+<button>Request fix loop</button></form>` : `<p class="muted">${escape(fix.reason)}</p>`}
+<h3>Backlog</h3>${run.backlog.length ? `<ul class="index-list">${run.backlog.map(finding => `<li>
+<a href="${taskHref(run.id, finding.taskId)}#attempt-${finding.attempt}">${escape(finding.title)}</a>
+<p>${escape(finding.evidence)}</p></li>`).join('')}</ul>` : '<p class="muted">No deferred findings recorded.</p>'}
+${run.fixLoops.length ? `<h3>Fix loop history</h3><ol class="index-list">${run.fixLoops.map(loop => `<li>
+<strong>Loop ${loop.number} · ${escape(loop.owner)}</strong><p>${escape(loop.note)}</p>
+<p>Previous candidate <code>${escape(loop.candidate.slice(0, 12))}</code></p></li>`).join('')}</ol>` : ''}</section>`;
+}
+
 function checksPanel(run) {
   const build = run.tasks.find(task => task.packet.execution?.kind === 'build');
-  const receipt = build?.attempts.at(-1)?.runnerArtifacts?.['check-receipt'];
-  const result = build?.attempts.at(-1)?.verification;
+  const receipt = currentAttempt(build)?.runnerArtifacts?.['check-receipt'];
+  const result = currentAttempt(build)?.verification;
   return `<div class="epic-sections">${qaPanel(run) || '<p class="empty-state">No independent checks are configured for this run.</p>'}
 ${receipt && result ? `<section class="record-section author-check"><h2>Author tests</h2><p>${stateBadge(result.passed ? 'Suite passed' : 'Suite failed', result.passed ? 'success' : 'warning')}</p>
 <p>Docker receipt for <code>${escape(result.testedCommit.slice(0, 7))}</code>.</p><a href="${artifactHref(run.id, receipt)}?view=checks">Open author test receipt ${arrow}</a></section>` : ''}</div>`;
@@ -254,7 +309,7 @@ function searchPanel(run, query, type) {
   const selected = Object.hasOwn(searchTypes, type) ? type : 'all';
   const handoffs = run.tasks.map(task => {
     const profile = run.profiles.find(value => value.id === task.packet.profileId);
-    const attempt = task.attempts.at(-1);
+    const attempt = currentAttempt(task);
     return { title: task.packet.title, detail: profile.name, href: pipelineHref(run, task.packet.id),
       terms: [task.packet.id, task.packet.objective, attempt?.result?.summary] };
   });
@@ -264,7 +319,7 @@ function searchPanel(run, query, type) {
     return { title: artifact.title, detail, href: task ? `${artifactHref(run.id, artifact.id, task.packet.id)}&amp;view=pipeline` : `${artifactHref(run.id, artifact.id)}?view=epic`,
       terms: [artifact.id, artifact.kind, artifact.provenance.sourceCommit, artifact.provenance.path] };
   });
-  const verification = run.tasks.find(task => task.packet.execution?.kind === 'verify')?.attempts.at(-1)?.verification;
+  const verification = currentAttempt(run.tasks.find(task => task.packet.execution?.kind === 'verify'))?.verification;
   const checks = (verification?.checks ?? []).map(check => ({ title: `${check.criterion} · ${check.command.join(' ')}`,
     detail: `${check.passed ? 'Passed' : 'Failed'} · ${verification.testedCommit.slice(0, 7)}`,
     href: epicViewHref(run, 'checks', `#check-${encodeURIComponent(check.id)}`), terms: [check.id, check.criterion, verification.testedCommit, 'Docker'] }));
@@ -341,8 +396,8 @@ ${skipLinks.length ? `<p class="pipeline-earlier">Also follows ${skipLinks.map(u
 }
 
 function handoffArtifacts(task) {
-  const { packet, packetId, attempts } = task;
-  const latest = attempts.at(-1);
+  const { packet, packetId } = task;
+  const latest = currentAttempt(task);
   return {
     inputs: [latest?.packetId ?? packetId, ...(latest?.inputArtifacts ?? packet.inputArtifacts)],
     outputs: [...Object.values(latest?.result?.artifacts ?? {}), latest?.runnerArtifacts?.candidate,
@@ -369,7 +424,7 @@ function evidenceLinks(run, taskId, ids, attempt, view) {
 
 function pipelineDetails(run, task, taskById) {
   const { packet, attempts } = task;
-  const latest = attempts.at(-1);
+  const latest = currentAttempt(task);
   const [verdict, description, tone] = taskStatus(run, task);
   const { inputs, outputs, evidence } = handoffArtifacts(task);
   const profile = run.profiles.find(value => value.id === packet.profileId);
@@ -383,13 +438,14 @@ ${packet.prerequisites.length ? `<p class="pipeline-deps"><strong>Depends on</st
 <div class="pipeline-artifacts"><section><h4>Inputs</h4>${links(run, packet.id, inputs, 'pipeline')}</section>
 <section><h4>Outputs</h4>${outputs.length ? links(run, packet.id, outputs, 'pipeline') : `<p class="muted">Expected ${escape(packet.outputs.map(slot => slot.title ?? slot.id).join(', '))}.</p>`}</section>
 <section><h4>Evidence</h4>${evidenceLinks(run, packet.id, evidence, latest, 'pipeline')}</section></div>
-<p class="pipeline-detail-links"><a href="${taskHref(run.id, packet.id)}">Open full handoff${attempts.length > 1 ? ` · ${attempts.length} attempts` : ''} ${arrow}</a></p></section>`;
+<p class="pipeline-detail-links"><a href="${taskHref(run.id, packet.id)}">Open full handoff${attempts.length > 1 ? ` · ${attempts.length} attempts` : ''} ${arrow}</a>
+${run.orchestration?.reviewTasks.includes(packet.id) ? ` · <a href="${epicViewHref(run, 'reviews')}">Implementation reviews</a>` : ''}</p></section>`;
 }
 
 function qaPanel(run) {
   const task = run.tasks.find(task => task.packet.execution?.kind === 'verify');
   if (!task) return '';
-  const attempt = task.attempts.at(-1);
+  const attempt = currentAttempt(task);
   const qa = attempt?.verification;
   if (!qa) return `<section class="record-section"><h2 id="qa-heading">Independent QA</h2><p>${escape(taskStatus(run, task)[1])}</p></section>`;
   const passed = qa.checks.filter(check => check.passed).length;
@@ -417,10 +473,11 @@ function links(run, taskId, ids, view) {
   }).join('')}</ul>`;
 }
 
-function controls(run, packet, attempts, waiting) {
+function controls(run, task, waiting) {
   if (waiting.length) return '';
-  const attempt = attempts.at(-1);
-  const attemptsAtRevision = attempts.filter(item => item.packetRevision === packet.revision).length;
+  const { packet } = task;
+  const attempt = currentAttempt(task);
+  const attemptsAtRevision = currentAttempts(task).filter(item => item.packetRevision === packet.revision).length;
   const rework = attempt?.decision?.disposition === 'rework';
   const dispatch = !attempt || (rework && attemptsAtRevision < packet.budget.maxAttempts);
   const action = taskHref(run.id, packet.id);
@@ -433,7 +490,8 @@ ${build ? `<form method="post" action="${action}"><input type="hidden" name="bui
   if (!attempt.decision && attempt.outcome !== 'running') return `<form method="post" action="${action}" class="decision">
     <input type="hidden" name="action" value="decide"><input type="hidden" name="attempt" value="${escape(attempt.id)}">
     <label for="note">Decision reason</label><textarea name="note" id="note" rows="2" required maxlength="2000"></textarea>
-    <div class="buttons">${attempt.outcome === 'completed' && attempt.result?.state === 'completed' && attempt.evidenceStatus === 'recorded' ? '<button name="disposition" value="accepted">Accept handoff</button>' : ''}
+    <div class="buttons">${attempt.outcome === 'completed' && attempt.result?.state === 'completed' && attempt.evidenceStatus === 'recorded' &&
+      !attempt.reviewFindings?.some(finding => finding.severity === 'blocker') ? '<button name="disposition" value="accepted">Accept handoff</button>' : ''}
     <button class="secondary" name="disposition" value="rework">Request rework</button></div></form>`;
   return '';
 }
@@ -441,7 +499,7 @@ ${build ? `<form method="post" action="${action}"><input type="hidden" name="bui
 export function runPage(run, task) {
   const { packet, attempts } = task;
   const profile = run.profiles.find(value => value.id === packet.profileId);
-  const latest = attempts.at(-1);
+  const latest = currentAttempt(task);
   const [verdict, description, tone] = taskStatus(run, task);
   const { inputs, outputs, evidence } = handoffArtifacts(task);
   const expected = packet.outputs.map(slot => slot.id).join(', ');
@@ -449,8 +507,9 @@ export function runPage(run, task) {
 ${projectHeader(run.project)}
 <main id="main"><nav class="breadcrumbs" aria-label="Location"><a href="${pipelineHref(run, packet.id)}">${escape(run.epic.title)}</a></nav><h1>${escape(packet.title)}</h1>
 <p class="intro">${escape(packet.objective)}</p>
+${run.orchestration?.reviewTasks.includes(packet.id) ? `<p><a href="${epicViewHref(run, 'reviews')}">Implementation reviews and backlog</a></p>` : ''}
 <section class="status ${tone}" aria-labelledby="run-status"><div><p class="eyebrow">Current status</p>
-<h2 id="run-status">${verdict}</h2><p>${escape(description)}</p></div><div class="action">${controls(run, packet, attempts, waitingOn(run, task))}</div></section>
+<h2 id="run-status">${verdict}</h2><p>${escape(description)}</p></div><div class="action">${controls(run, task, waitingOn(run, task))}</div></section>
 <div class="columns"><aside><h2>Workflow</h2><ul class="links workflow">${run.tasks.map(item => `<li>
 <a href="${taskHref(run.id, item.packet.id)}"${item === task ? ' aria-current="page"' : ''}>${escape(item.packet.title)}<span>${escape(taskStatus(run, item)[0])}</span></a></li>`).join('')}</ul>
 <dl class="meta"><div><dt>Assigned to</dt><dd><a href="${artifactHref(run.id, profile.instructionId, packet.id)}">${escape(profile.name)}</a></dd></div>
