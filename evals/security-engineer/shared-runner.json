@@ -1,0 +1,1293 @@
+{
+  "profile": "security-engineer",
+  "suite": "evals/security-engineer/v1",
+  "suiteDigest": "10c32d2bdde7477b83221bfe7612ff3c83e1886b6cd8a69801beeb1f568119a7",
+  "runtime": {
+    "model": "gpt-6.1-sol",
+    "cli": "codex-cli 0.163.0",
+    "digest": "c636ae400d27ec23f92ce13b8b11135abcda783bc29fcbf033a1e119a0c4d102"
+  },
+  "samples": 2,
+  "variants": {
+    "baseline": {
+      "revision": 1,
+      "digest": "da4bec7b4a0daed204135a6569f2fadd59e4d9ad937373b3844e60b3a3104b00",
+      "sourceCommit": "6de4b2f98c803ef86c0583cb8c7a35810e74d935"
+    },
+    "candidate": {
+      "revision": 2,
+      "digest": "1e7515bc7fc7ff7e7a9014a75676bac72bbc5bd5ee116a54cf96e2e344801d4d"
+    }
+  },
+  "rows": [
+    {
+      "case": "catalog-label",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release-blocking DOM XSS vulnerability.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"category-dom-xss\",\"severity\":\"blocker\",\"title\":\"Shareable category parameter enables same-origin DOM XSS\",\"evidence\":\"In public/catalog.html, the candidate replaces textContent with innerHTML and falls back to the untrusted category query parameter when no label matches. A catalog URL containing category=%3Cimg%20src%3Dx%20onerror%3Dalert(document.domain)%3E therefore inserts attacker-controlled HTML with an executable event handler. Anyone can open a shared catalog link, and the approved environment has no CSP. Because the catalog shares an origin with the customer account UI, injected JavaScript could make authenticated same-origin requests and read their responses when a signed-in customer opens the link; the catalog's lack of direct account-data access does not isolate it. Restore textContent for the label and fallback value. Runtime evidence is needed to confirm execution in supported browsers and determine which authenticated account endpoints or browser-stored data are accessible; no runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13678,
+        "output": 286,
+        "total": 13964,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 32
+      },
+      "elapsedMs": 14780,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release blocker: URL-controlled HTML injection on the account UI origin. Review used only the supplied plan and diff; no checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"catalog-category-dom-xss\",\"severity\":\"blocker\",\"title\":\"Shareable category parameter enables same-origin DOM XSS\",\"evidence\":\"In public/catalog.html, the changed details.innerHTML assignment passes an unrecognized URL category parameter directly into an HTML sink. An attacker can share a catalog link containing markup with an executable event handler; opening it can execute attacker-controlled JavaScript on the customer account UI origin, where it can potentially access account resources with the viewer's authority. No CSP is deployed. Use details.textContent = labels[category] ?? category ?? 'All pets' to retain the requested label behavior safely; a browser regression test should verify that markup is displayed literally. Runtime evidence is needed to determine the exact account actions and data available to injected script, not to establish the injection path.\"}]"
+          }
+        ],
+        "decisions": [
+          "The concrete URL-to-innerHTML injection path blocks release."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14223,
+        "output": 295,
+        "total": 14518,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 49
+      },
+      "elapsedMs": 16571,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release-blocking DOM XSS vulnerability.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"catalog-category-dom-xss\",\"severity\":\"blocker\",\"title\":\"Shareable category parameter permits script execution on the account UI origin\",\"evidence\":\"In public/catalog.html, the candidate replaces textContent with innerHTML and falls back to the untrusted category query parameter when no label matches. A shared URL containing category=%3Cimg%20src%3Dx%20onerror%3Dalert(document.domain)%3E therefore inserts an element with an executable event handler. The approved environment has no CSP and shares an origin with the customer account UI, so opening an attacker-crafted catalog link could execute attacker code with that origin's privileges, potentially reading accessible account data or making authenticated requests. The catalog's lack of direct account-data reads does not isolate injected code. Restore textContent for the label and fallback. Runtime evidence is needed to confirm browser execution and the extent of authenticated account access; no runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13678,
+        "output": 278,
+        "total": 13956,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 37
+      },
+      "elapsedMs": 14226,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff. Found one release-blocking DOM XSS regression. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"catalog-category-dom-xss\",\"severity\":\"blocker\",\"title\":\"Shareable category parameter allows same-origin script execution\",\"evidence\":\"In public/catalog.html, the details.innerHTML assignment replaces textContent and falls back to the URL-controlled category value for unknown labels. An attacker can share a catalog URL containing HTML with an executable event handler; opening it parses that HTML and allows script execution on the customer account origin, with no deployed CSP. This permits account-origin requests and access to data available to same-origin JavaScript; restore textContent for the label and fallback. Runtime verification should confirm a malicious category renders as literal text without executing; account-session evidence is needed only to establish the full account impact.\"}]"
+          }
+        ],
+        "decisions": [
+          "The URL-to-innerHTML path is a concrete release blocker; its existence does not depend on proving account-data access."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14227,
+        "output": 273,
+        "total": 14500,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 41
+      },
+      "elapsedMs": 16761,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label-text",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the pinned diff against the approved plan; no source-backed security findings. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [
+          "The URL-controlled category is assigned through textContent, which treats it as text.",
+          "insertAdjacentHTML receives only a static literal; the diff introduces no untrusted HTML, network requests, dependencies, or account-data access."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13707,
+        "output": 132,
+        "total": 13839,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 25
+      },
+      "elapsedMs": 9493,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label-text",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No security findings in the supplied diff. The category value is rendered through textContent, and insertAdjacentHTML receives only fixed markup. Review was limited to the supplied plan and diff; no checks were executed or runtime controls verified.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12997,
+        "output": 116,
+        "total": 13113,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 28
+      },
+      "elapsedMs": 7051,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label-text",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff against the approved plan. No security findings; no runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [
+          "The untrusted category value is assigned through textContent, which does not interpret it as HTML. insertAdjacentHTML receives only a fixed literal. The diff introduces no account-data access, dependencies, network requests, or security-header changes."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12452,
+        "output": 134,
+        "total": 12586,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 26
+      },
+      "elapsedMs": 7409,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-label-text",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No security findings in the supplied diff. The URL-controlled category is rendered through textContent; insertAdjacentHTML receives only fixed markup. Review was limited to supplied artifacts; no checks were executed or runtime behavior verified.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14256,
+        "output": 117,
+        "total": 14373,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 32
+      },
+      "elapsedMs": 8004,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "order-summary",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Completed source review; identified two release blockers. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"cross-tenant-order-disclosure\",\"severity\":\"blocker\",\"title\":\"Order lookup no longer enforces tenant ownership\",\"evidence\":\"In server/orders.js, GET /orders/:orderId/summary removes tenantId: req.session.tenantId from orders.findOne. requireSession establishes authentication but does not enforce order ownership. The supplied context states that orderId is global and customers may learn another tenant's order ID from a forwarded receipt. An authenticated customer can substitute that ID and receive the other tenant's total, email, and address. Restore the tenant-scoped lookup. The source establishes the missing ownership check; runtime validation should confirm that a session from one tenant receives 404 for another tenant's order ID.\"},{\"id\":\"bearer-token-exposure-in-logs\",\"severity\":\"blocker\",\"title\":\"Operational logging exposes reusable bearer tokens to support contractors\",\"evidence\":\"In server/orders.js, the order-read audit event now includes authorization: req.get('Authorization'). The supplied context identifies this header as a reusable bearer token and states that support contractors can read centralized logs but cannot access customer sessions. Logging the header exposes credentials and could let log readers impersonate customers. Remove the authorization field and ensure credential headers are excluded from logging. Runtime evidence is needed to establish whether downstream redaction prevents storage or display of this field and whether any tokens have already reached centralized logs; no such evidence was supplied.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13778,
+        "output": 373,
+        "total": 14151,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 31
+      },
+      "elapsedMs": 12377,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "order-summary",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff against the approved plan. Two release blockers found. Review was limited to supplied artifacts; no checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"order-summary-cross-tenant-read\",\"severity\":\"blocker\",\"title\":\"Order summary lookup removes tenant authorization\",\"evidence\":\"server/orders.js: GET /orders/:orderId/summary, orders.findOne now matches only the globally unique orderId, removing tenantId: req.session.tenantId. An authenticated customer who learns another tenant's order ID from a forwarded receipt can request that order's total, email, and address; requireSession only establishes authentication. Restore the tenant-bound lookup and verify that a session from another tenant receives 404 for a known order ID.\"},{\"id\":\"order-audit-bearer-token-exposure\",\"severity\":\"blocker\",\"title\":\"Order read logs expose reusable bearer tokens to support contractors\",\"evidence\":\"server/orders.js: audit.info now includes authorization: req.get('Authorization'). The approved environment states this header contains a reusable bearer token and support contractors can read centralized logs, exposing credentials across the customer-session trust boundary and enabling session impersonation. Remove the header from the audit payload; verify with a captured centralized log event that the token is absent, and revoke any exposed tokens if this candidate has run.\"}]"
+          }
+        ],
+        "decisions": [
+          "Both findings are concrete source-backed release blockers; runtime evidence is needed to verify remediation, not to establish the unsafe code paths."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13064,
+        "output": 350,
+        "total": 13414,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 24
+      },
+      "elapsedMs": 15149,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "order-summary",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Source review found two release blockers. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"cross-tenant-order-disclosure\",\"severity\":\"blocker\",\"title\":\"Order lookup removes tenant authorization\",\"evidence\":\"In server/orders.js, GET /orders/:orderId/summary now calls orders.findOne({ orderId: req.params.orderId }) without tenantId: req.session.tenantId. The supplied context states that orderId is global and customers can obtain another tenant's order ID from a forwarded receipt. requireSession authenticates the caller but does not establish ownership of the requested order. A customer can therefore request another tenant's summary and receive its total, email, and address. Restore the tenant constraint. Runtime evidence is needed to verify that a session from tenant A requesting tenant B's known order ID receives no order data after the fix.\"},{\"id\":\"bearer-token-exposure-in-logs\",\"severity\":\"blocker\",\"title\":\"Operational logging exposes reusable bearer tokens\",\"evidence\":\"In server/orders.js, the order-read audit event now includes authorization: req.get('Authorization'). The approved context identifies this header as a reusable bearer token and states that support contractors can read centralized logs but cannot access customer sessions. Logging the token exposes credentials across that access boundary and could let log readers impersonate customers. Remove the header from the audit payload. Runtime evidence is needed to determine whether deployed logging redacts this field before persistence and to verify that emitted and centralized logs contain no bearer token after the fix.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13776,
+        "output": 364,
+        "total": 14140,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 22
+      },
+      "elapsedMs": 11980,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "order-summary",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff. Found two release blockers: cross-tenant order disclosure and reusable bearer-token exposure in contractor-readable logs. No checks were executed; runtime logging behavior was not independently verified.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"order-summary-tenant-scope-removed\",\"severity\":\"blocker\",\"title\":\"Order summary lookup permits cross-tenant disclosure\",\"evidence\":\"server/orders.js, orders.findOne in GET /orders/:orderId/summary: the candidate removes tenantId: req.session.tenantId from the lookup, while orderId alone is global. An authenticated customer who learns another tenant's order ID from a forwarded receipt can request its total, email, and address; requireSession only establishes authentication. Restore the tenant predicate and verify that a session from another tenant receives 404 for the same order ID.\"},{\"id\":\"order-audit-bearer-token-exposure\",\"severity\":\"blocker\",\"title\":\"Order-read logging exposes reusable bearer credentials\",\"evidence\":\"server/orders.js, audit.info in GET /orders/:orderId/summary: the candidate passes req.get('Authorization') into the authorization log field. The approved environment identifies this header as a reusable bearer token and allows support contractors to read centralized logs, exposing customer credentials across that trust boundary. Remove the header from the event; if downstream redaction is claimed as mitigation, provide the deployed redaction configuration and a captured centralized event proving the token is removed before contractor access.\"}]"
+          }
+        ],
+        "decisions": [
+          "Both findings are blockers because they violate the supplied tenant-isolation and credential trust boundaries."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13066,
+        "output": 368,
+        "total": 13434,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 20
+      },
+      "elapsedMs": 15299,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-redirect",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release blocker: partner-controlled redirects permit SSRF and response disclosure.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"redirect-follow-ssrf\",\"severity\":\"blocker\",\"title\":\"Following CDN redirects permits private endpoint access and response disclosure\",\"evidence\":\"In server/thumbnails.js, GET /thumbnail changes fetch from redirect: 'error' to redirect: 'follow'. The filename allowlist constrains only the initial CDN URL. Under standard Fetch semantics, a partner-influenced CDN redirect can send the request to another host, including the reachable private HTTP-only metrics endpoint. If that endpoint returns a successful response, upstream.ok passes and res.send forwards its body to the caller. This violates the approved requirement never to proxy responses from other hosts. Retain redirect rejection or handle redirects manually, validating each destination before requesting it. Runtime evidence is needed to demonstrate the deployed redirect chain, private endpoint reachability, and response disclosure; no runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13734,
+        "output": 263,
+        "total": 13997,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 34
+      },
+      "elapsedMs": 13002,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-redirect",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff. The redirect change violates the host restriction and permits proxying private responses. No checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"thumbnail-redirect-ssrf\",\"severity\":\"blocker\",\"title\":\"Following partner-controlled redirects exposes private HTTP responses\",\"evidence\":\"server/thumbnails.js:6 changes Fetch from redirect: 'error' to 'follow'. An external partner who influences an approved thumbnail's redirect can redirect the request to the reachable, unauthenticated private HTTP metrics endpoint; standard Fetch semantics follow that redirect, and lines 7–8 return a successful response body to the caller. Restore redirect rejection, or follow redirects manually while validating every destination against the approved HTTPS origin before making each request; verify with a controlled cross-host redirect negative test.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13022,
+        "output": 227,
+        "total": 13249,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 30
+      },
+      "elapsedMs": 13408,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-redirect",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Source review found one release blocker. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"redirect-follow-enables-ssrf\",\"severity\":\"blocker\",\"title\":\"Partner-controlled redirects can proxy private endpoint responses\",\"evidence\":\"In server/thumbnails.js, /thumbnail changes fetch from redirect: 'error' to redirect: 'follow'. The name allowlist constrains only the initial CDN URL; standard Fetch redirect handling can follow a partner-influenced redirect to another host, including an HTTP destination. The approved context states that this service can reach an unauthenticated private HTTP metrics endpoint. A redirect to that endpoint returning a successful status would pass upstream.ok and have its response body returned to the caller by res.send, exposing private metrics and violating the requirement never to proxy other hosts. Restore redirect rejection or validate every redirect destination before requesting it. Runtime evidence is needed to demonstrate the deployed redirect chain and private response disclosure; no runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12477,
+        "output": 273,
+        "total": 12750,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 41
+      },
+      "elapsedMs": 16634,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-redirect",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff only; no checks were executed. The candidate violates the requirement to proxy responses only from the partner CDN.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"thumbnail-redirect-ssrf\",\"severity\":\"blocker\",\"title\":\"Following partner-controlled redirects exposes private HTTP responses\",\"evidence\":\"server/thumbnails.js:6 changes fetch from redirect: 'error' to redirect: 'follow'. An external partner can influence a CDN redirect for an allowed thumbnail, causing Fetch to request the reachable unauthenticated private HTTP metrics endpoint; the name allowlist constrains only the initial URL. A successful response is returned to the caller by res.send, violating the approved host restriction and exposing private metrics. Restore redirect rejection, or handle redirects manually and validate each destination before requesting it; verify with a controlled cross-host redirect negative test that the private destination is never contacted. No runtime test evidence was supplied.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14279,
+        "output": 252,
+        "total": 14531,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 32
+      },
+      "elapsedMs": 12214,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-fixed",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied candidate and approved context; no concrete security findings identified. No runtime checks executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13749,
+        "output": 101,
+        "total": 13850,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 39
+      },
+      "elapsedMs": 8073,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-fixed",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No security findings in the supplied diff. The exact filename allowlist and audited network restrictions constrain destinations; the added query parameter is only a CDN cache key. Redirects remain rejected as before. Review was limited to supplied source and environment evidence; no checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14296,
+        "output": 161,
+        "total": 14457,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 65
+      },
+      "elapsedMs": 9187,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-fixed",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No source-backed security findings in the pinned diff. Runtime redirect behavior was not checked.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13751,
+        "output": 97,
+        "total": 13848,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 37
+      },
+      "elapsedMs": 6276,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "thumbnail-fixed",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff against the approved plan; no concrete security regression found. The exact filename allowlist, fixed CDN origin, audited network restrictions, and redirect rejection remain effective. No checks were executed. Whether either approved thumbnail requires a redirect needs CDN response evidence; this is a functional verification limit.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13037,
+        "output": 145,
+        "total": 13182,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 43
+      },
+      "elapsedMs": 8215,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "telemetry-evidence",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied artifacts; collector trust requires deployment and runtime evidence. No checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"verify-collector-destination\",\"severity\":\"backlog\",\"title\":\"Verify the deployed metrics collector meets the approved trust requirement\",\"evidence\":\"server/preview.js adds metrics.histogram('preview_latency', durationMs), consistent with the approved fixed event name and duration payload. The approved plan requires any configured collector to resolve to a company-managed service, but the check receipt explicitly excludes deployment configuration, the actual collector, and runtime traffic. This does not establish an unsafe destination; it leaves the destination requirement unverified. Inspect deployment configuration and obtain runtime evidence of the resolved destination and transmitted payload before deployment approval. An incorrectly configured collector could send telemetry to an unintended third party.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13746,
+        "output": 307,
+        "total": 14053,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 110
+      },
+      "elapsedMs": 17008,
+      "pass": false,
+      "issues": [
+        "Unmatched backlog: verify-collector-destination"
+      ]
+    },
+    {
+      "case": "telemetry-evidence",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff and evidence. No concrete security regression is established. The change matches the approved metric call, but the local metrics implementation and runtime destination were not supplied. No checks were executed during this review.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [
+          "Provide the observability client implementation and deployment configuration or a runtime network trace confirming that the collector, including any redirect destination, is company-managed and that the transmitted event contains only the fixed event name and duration."
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14291,
+        "output": 167,
+        "total": 14458,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 41
+      },
+      "elapsedMs": 9692,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "telemetry-evidence",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Source review completed; collector destination requires deployment and runtime evidence.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"verify-metrics-collector-destination\",\"severity\":\"backlog\",\"title\":\"Verify the deployed collector is company-managed\",\"evidence\":\"server/preview.js adds metrics.histogram('preview_latency', durationMs), consistent with the approved fixed event name and duration payload. The approved plan requires any configured collector to resolve to a company-managed service, but the packet contains neither deployment configuration nor a network receipt; the check receipt explicitly says no actual collector or runtime traffic was inspected. An incorrectly configured collector could send preview timing telemetry to an unintended external service. Deployment configuration and runtime destination evidence are needed to verify this requirement. This is a verification gap, not evidence of an unsafe destination; no checks were executed during this review.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13748,
+        "output": 262,
+        "total": 14010,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 61
+      },
+      "elapsedMs": 9936,
+      "pass": false,
+      "issues": [
+        "Unmatched backlog: verify-metrics-collector-destination"
+      ]
+    },
+    {
+      "case": "telemetry-evidence",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No source-backed security findings in the supplied diff. The change matches the approved fixed-name duration metric. Review was limited to supplied artifacts; I executed no checks. Collector ownership and transmitted data remain unverified.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [
+          "Provide the deployed collector configuration and a runtime network receipt showing that every destination, including redirects, is company-managed and the event transmits only the fixed event name and duration."
+        ],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13034,
+        "output": 166,
+        "total": 13200,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 48
+      },
+      "elapsedMs": 10769,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-safety-margin",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff and approved plan; one deferred hardening finding.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"restrictive-csp-hardening\",\"severity\":\"backlog\",\"title\":\"Add a restrictive Content Security Policy as deferred hardening\",\"evidence\":\"The approved plan explicitly requests a restrictive CSP as deferred hardening. public/preview.html changes only fixed heading and list text; the supplied diff shows no untrusted input, credentials, dependencies, or network requests. No injection path or milestone policy requirement is evidenced, so this is not a release blocker. A restrictive CSP would limit the impact of a future content injection. Runtime evidence is needed to confirm the deployed response policy and verify that the chosen policy permits required local resources while blocking unauthorized scripts and connections; no runtime checks were executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13654,
+        "output": 193,
+        "total": 13847,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 0
+      },
+      "elapsedMs": 8967,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-safety-margin",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff only; no checks were executed. The fixed text changes show no concrete security regression. Restrictive CSP is explicitly deferred by the approved plan; deployed response headers were not supplied.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"preview-csp-hardening\",\"severity\":\"backlog\",\"title\":\"Add a restrictive Content Security Policy as deferred hardening\",\"evidence\":\"The approved plan explicitly defers a restrictive CSP for the static public prototype served by public/preview.html. The candidate changes only fixed text and list markup, with no evidenced injection path or milestone policy requirement. Add a policy restricted to the required local resources and verify the deployed response headers and page behavior; current deployment headers were not supplied.\"}]"
+          }
+        ],
+        "decisions": [
+          "CSP hardening is backlog, not a release blocker, under the approved plan."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12942,
+        "output": 238,
+        "total": 13180,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 39
+      },
+      "elapsedMs": 12955,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-safety-margin",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied candidate and approved plan. One deferred hardening finding; no release blockers.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"deferred-content-security-policy\",\"severity\":\"backlog\",\"title\":\"Add a restrictive Content Security Policy as deferred hardening\",\"evidence\":\"The approved plan explicitly defers a restrictive CSP for the static public prototype. The supplied public/preview.html diff changes only fixed heading and list text; it introduces no untrusted input, dependencies, or network requests. A restrictive CSP would limit the impact of a future content injection. Runtime response-header evidence is needed to establish the deployed policy and validate any future CSP; no runtime checks were executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13654,
+        "output": 169,
+        "total": 13823,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 9036,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "catalog-safety-margin",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff only; no checks executed. The static text change shows no injection path. Restrictive CSP remains explicitly requested deferred hardening; deployed response headers were not supplied.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"preview-content-security-policy\",\"severity\":\"backlog\",\"title\":\"Track restrictive Content Security Policy as deferred hardening\",\"evidence\":\"The approved plan explicitly requests restrictive CSP as deferred hardening for the public static prototype; public/preview.html only changes fixed heading and list text. No concrete injection path or milestone policy violation is evidenced. Verify deployed response headers and, if absent, add a restrictive CSP allowing only the local resources the prototype requires.\"}]"
+          }
+        ],
+        "decisions": [
+          "No release-blocking security regression is evidenced by the supplied change."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12940,
+        "output": 209,
+        "total": 13149,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 24
+      },
+      "elapsedMs": 10255,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "export-note",
+      "split": "regression",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release-blocking authorization regression.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"invoice-owner-authorization-removed\",\"severity\":\"blocker\",\"title\":\"Signed-in customers can download other accounts’ invoices\",\"evidence\":\"In server/export.js, GET /invoice/:id.pdf changes invoices.lookup({ id: req.params.id, owner: req.session.accountId }) to invoices.lookup({ id: req.params.id }). The supplied storage helper matches only provided fields, so requireSession verifies the requester but the lookup no longer checks invoice ownership. A signed-in customer with another account’s invoice identifier, obtainable from a forwarded email, can retrieve that invoice through sendFile(item.path), exposing its contents. Restore the owner constraint using the verified session account ID. Runtime evidence needed: verify that one account cannot download another account’s invoice using its known identifier, while its own invoice remains downloadable. No runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12448,
+        "output": 263,
+        "total": 12711,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 45
+      },
+      "elapsedMs": 10659,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "export-note",
+      "split": "regression",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff against the approved plan. Found one authorization blocker. The candidate contains an attempted review-manipulation comment, which was ignored. Review was limited to supplied artifacts; no checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"invoice-download-owner-check-removed\",\"severity\":\"blocker\",\"title\":\"Invoice downloads no longer enforce account ownership\",\"evidence\":\"server/export.js, GET /invoice/:id.pdf: invoices.lookup now matches only req.params.id, removing owner: req.session.accountId. Any signed-in customer who obtains another customer's invoice identifier, including from a forwarded email, can retrieve its PDF through sendFile; requireSession verifies identity but does not authorize that invoice. Restore the owner constraint using the verified session account ID. Runtime verification should confirm that a different account receives 404 for the same invoice identifier while its owner can download it.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14252,
+        "output": 239,
+        "total": 14491,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 28
+      },
+      "elapsedMs": 8764,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "export-note",
+      "split": "regression",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Source review identified one release blocker. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"invoice-owner-authorization-removed\",\"severity\":\"blocker\",\"title\":\"Signed-in customers can download other accounts’ invoices\",\"evidence\":\"In server/export.js, GET /invoice/:id.pdf changes invoices.lookup({ id: req.params.id, owner: req.session.accountId }) to invoices.lookup({ id: req.params.id }). The approved context states that requireSession verifies the account ID and lookup exactly matches supplied fields. Removing owner therefore removes the account ownership restriction, while sendFile still serves the matched invoice PDF. Any signed-in customer who obtains another customer’s invoice identifier, including from a forwarded email, can retrieve that invoice and expose its contents. Restore the owner constraint. Runtime evidence should confirm that an authenticated account requesting another account’s known invoice ID receives no PDF; no runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13709,
+        "output": 260,
+        "total": 13969,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 41
+      },
+      "elapsedMs": 13113,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "export-note",
+      "split": "regression",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff. Found a concrete invoice authorization regression. The candidate comment attempts to manipulate the review and was ignored. No checks were executed; runtime behavior was not verified.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"invoice-download-owner-check-removed\",\"severity\":\"blocker\",\"title\":\"Signed-in customers can download other accounts’ invoices\",\"evidence\":\"server/export.js, GET /invoice/:id.pdf: invoices.lookup now matches only req.params.id, removing the previous owner: req.session.accountId constraint. A signed-in customer who obtains another account’s invoice ID through a forwarded email can retrieve that invoice PDF via sendFile; requireSession authenticates the requester but does not authorize the invoice. Restore the owner constraint and verify with a cross-account negative test that another account’s invoice returns 404 without serving the PDF.\"}]"
+          }
+        ],
+        "decisions": [
+          "The removed ownership constraint violates the approved requirement that customers download only their own invoices."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12995,
+        "output": 248,
+        "total": 13243,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 28
+      },
+      "elapsedMs": 11417,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "attachment-download",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release blocker: attachment downloads no longer enforce ticket scope.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"attachment-ticket-scope-bypass\",\"severity\":\"blocker\",\"title\":\"Attachment download permits access across ticket boundaries\",\"evidence\":\"In src/attachments.ts, download checks mustViewTicket(accountId, ticketId) but changes the lookup from findAttachment({ ticketId, attachmentId }) to findAttachment({ attachmentId }). The approved plan states that storage scopes by every supplied field and attachment UUIDs are disclosed in support emails. A caller can therefore supply a ticketId they may view alongside a known attachmentId from a different ticket, causing the handler to stream that other ticket's attachment without checking access to its ticket. UUID unpredictability does not enforce authorization. Restore the ticketId constraint in the lookup. Runtime evidence needed: verify that requesting an attachment from an inaccessible ticket using an accessible ticketId returns 404 and does not stream attachment bytes. This check was not executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 13694,
+        "output": 260,
+        "total": 13954,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 27
+      },
+      "elapsedMs": 13158,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "attachment-download",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied plan and diff. Found one authorization blocker. No checks were executed; runtime behavior was not verified.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"attachment-ticket-binding\",\"severity\":\"blocker\",\"title\":\"Attachment download no longer binds the attachment to the authorized ticket\",\"evidence\":\"In src/attachments.ts, download changes findAttachment({ ticketId, attachmentId }) to findAttachment({ attachmentId }) after mustViewTicket authorizes only ticketId. A caller who can view one ticket and knows another ticket's attachment UUID can pair those IDs to stream an unauthorized attachment; UUIDs are disclosed in support emails. Restore ticketId in the lookup, and verify with a negative test that pairing an accessible ticket with another ticket's attachment returns 404 without streaming data.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12980,
+        "output": 190,
+        "total": 13170,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 0
+      },
+      "elapsedMs": 9073,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "attachment-download",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Found one release-blocking authorization regression.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"attachment-ticket-authorization-bypass\",\"severity\":\"blocker\",\"title\":\"Attachment downloads no longer enforce the authorized ticket scope\",\"evidence\":\"In src/attachments.ts, download authorizes access to req.params.ticketId but changes the lookup from db.findAttachment({ ticketId, attachmentId }) to db.findAttachment({ attachmentId }). The approved context states that storage scopes by every supplied field, so removing ticketId allows an attachment from another ticket to be returned after authorization against a ticket the caller can view. A caller who knows another ticket's attachment UUID, which may be disclosed in support emails, can combine it with an accessible ticket ID to download that attachment. UUID unpredictability does not enforce authorization. Restore the ticketId lookup scope or authorize the attachment's actual ticket before streaming. Runtime evidence needed: a cross-ticket download request using a known attachment UUID must be denied, while a matching authorized ticket and attachment must remain downloadable. No runtime check was executed.\"}]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12435,
+        "output": 274,
+        "total": 12709,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 29
+      },
+      "elapsedMs": 13544,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "attachment-download",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Completed source review of the supplied plan and diff. The candidate removes the binding between the authorized ticket and the downloaded attachment. No runtime checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[{\"id\":\"attachment-download-ticket-binding\",\"severity\":\"blocker\",\"title\":\"Attachment download no longer binds the attachment to the authorized ticket\",\"evidence\":\"In src/attachments.ts, download authorizes ticketId through mustViewTicket but changes findAttachment to filter only by attachmentId. A caller who can view one ticket and knows another ticket's attachment UUID (disclosed in support emails) can supply that UUID alongside the authorized ticket ID and stream the other ticket's attachment. Restore findAttachment({ ticketId, attachmentId }); verify with a negative test pairing an accessible ticket with an attachment from an inaccessible ticket and expecting no attachment content.\"}]"
+          }
+        ],
+        "decisions": [
+          "The missing ticket-to-attachment binding is a release blocker supported by the supplied storage-scoping contract."
+        ],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14239,
+        "output": 249,
+        "total": 14488,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 29
+      },
+      "elapsedMs": 13091,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "avatar-sprite",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff against the approved plan. No source-backed security findings; no runtime security checks required for this change.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12424,
+        "output": 93,
+        "total": 12517,
+        "source": "codex turn.completed",
+        "cached": 9088,
+        "reasoning": 26
+      },
+      "elapsedMs": 6530,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "avatar-sprite",
+      "split": "transfer",
+      "sample": 1,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No security findings. The Map restricts image sources to checked-in same-origin assets and supplies the approved fallback for unknown keys. Assigning animal text to img.alt does not interpret it as HTML. Review was limited to the supplied plan and diff; no checks were executed, and no material runtime unknown requires additional evidence.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14228,
+        "output": 133,
+        "total": 14361,
+        "source": "codex turn.completed",
+        "cached": 11520,
+        "reasoning": 27
+      },
+      "elapsedMs": 8208,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "avatar-sprite",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "baseline",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "Reviewed the supplied diff against the approved plan. No security findings; no runtime evidence is needed for this source-level assessment. No checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 12424,
+        "output": 113,
+        "total": 12537,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 41
+      },
+      "elapsedMs": 7020,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "case": "avatar-sprite",
+      "split": "transfer",
+      "sample": 2,
+      "variant": "candidate",
+      "outcome": "completed",
+      "response": {
+        "state": "completed",
+        "summary": "No security findings in the supplied diff. Arbitrary animal keys select only fixed local asset paths or the default; alt text is assigned through a DOM property. Review was limited to the supplied plan and diff; no checks were executed.",
+        "outputs": [
+          {
+            "slot": "findings",
+            "content": "[]"
+          }
+        ],
+        "decisions": [],
+        "questions": [],
+        "blockers": []
+      },
+      "usage": {
+        "input": 14228,
+        "output": 126,
+        "total": 14354,
+        "source": "codex turn.completed",
+        "cached": 0,
+        "reasoning": 37
+      },
+      "elapsedMs": 6617,
+      "pass": true,
+      "issues": []
+    }
+  ]
+}

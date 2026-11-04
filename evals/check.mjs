@@ -7,6 +7,8 @@ import { parseArgs } from 'node:util';
 import { requireField } from '../lib/contracts.mjs';
 import { json, loadProfile, loadSuite, root, runtimeDigest, score } from './run.mjs';
 
+const projectsFor = entry => [entry.project, ...(entry.alsoProjects ?? [])];
+
 function verifyReports(entry, name, suite, profile) {
   const seen = new Set();
   let model, cli, baseline;
@@ -47,22 +49,26 @@ function verifyReports(entry, name, suite, profile) {
 
 export async function checkEvals() {
   const registry = json('evals/registry.json');
-  const projects = new Set([...globSync('examples/**/*crew.project.json', { cwd: root }), ...Object.values(registry).map(entry => entry.project)]);
+  const projects = new Set([...globSync('examples/**/*crew.project.json', { cwd: root }), ...Object.values(registry).flatMap(projectsFor)]);
   for (const project of projects) {
     for (const profile of json(project).profiles.filter(profile => profile.skills.length)) {
-      requireField(Object.values(registry).filter(entry => entry.project === project && entry.profile === profile.id).length === 1,
+      requireField(Object.values(registry).filter(entry => projectsFor(entry).includes(project) && entry.profile === profile.id).length === 1,
         `Register eval coverage for ${profile.id} in ${project} before activating skills`);
     }
   }
   for (const [name, entry] of Object.entries(registry)) {
     const profile = loadProfile(entry);
     const suite = await loadSuite(entry.suite);
+    const projects = projectsFor(entry);
+    const models = new Set(projects.map(project => json(project).runtime.model).filter(Boolean));
+    requireField(models.size <= 1 && projects.every(project => loadProfile({ ...entry, project }).digest === profile.digest),
+      `All projects covered by ${name} must use the same profile and compatible model`);
     const skills = profile.profile.skills;
     requireField(skills.length === Object.keys(entry.coverage).length && skills.every(path =>
       Array.isArray(entry.coverage[path]) && entry.coverage[path].length &&
       entry.coverage[path].every(id => suite.cases.some(item => item.id === id))),
     `Every active skill in ${name} needs a mapping to frozen cases`);
-    verifyReports(entry, name, suite, { ...profile, model: json(entry.project).runtime.model });
+    verifyReports(entry, name, suite, { ...profile, model: [...models][0] });
   }
 }
 
@@ -76,8 +82,15 @@ export function checkFrozenHistory(ref) {
     const previous = JSON.parse(git('show', `${base}:${registryPath}`));
     for (const [name, entry] of Object.entries(previous)) {
       const current = registry[name];
-      requireField(current?.project === entry.project && current.profile === entry.profile,
+      requireField(current?.project === entry.project && current.profile === entry.profile &&
+        projectsFor(entry).every(project => projectsFor(current).includes(project)),
         `Keep the existing eval registration for ${name}`);
+    }
+    for (const [name, current] of Object.entries(registry)) {
+      const entry = previous[name] ?? current;
+      if (!git('ls-tree', '--name-only', base, '--', entry.project).trim()) continue;
+      const priorProject = JSON.parse(git('show', `${base}:${entry.project}`));
+      if (!priorProject.profiles.some(profile => profile.id === entry.profile)) continue;
       const currentProfile = loadProfile(entry);
       const priorProfile = loadProfile(entry, base);
       if (currentProfile.digest !== priorProfile.digest) {

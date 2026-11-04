@@ -38,3 +38,24 @@ test('the live assignment carries no case ID, expected findings, or grader instr
   assert.match(packet.inputs[1].content, /redirect: 'follow'/);
   assert.doesNotMatch(JSON.stringify(packet), /thumbnail-redirect|rubric|transfer/);
 });
+
+test('SDM cases use distinct production slots and the QA grader rejects a leaked author oracle', async () => {
+  const sdm = json('evals/registry.json').sdm;
+  const suite = await loadSuite(sdm.suite);
+  const qa = suite.cases.find(item => item.id === 'qa-exact-candidate');
+  const plan = suite.cases.find(item => item.id === 'small-cli-slice');
+  const packet = assignment(suite, qa);
+  assert.equal(packet.task.outputs[0].id, 'qa-packet');
+  assert.equal(assignment(suite, plan).task.outputs[0].id, 'plan');
+  assert.deepEqual(packet.inputs.map(input => input.id), ['candidate', 'check-receipt', 'criteria']);
+  assert.doesNotMatch(JSON.stringify(packet), /qa-exact-candidate|rubric|transfer/);
+
+  const commit = JSON.parse(packet.inputs[0].content).commit;
+  const content = `QA candidate ${commit}. CAT-1 --list-pets JSON to stdout. CAT-2 no args greets. CAT-3 exits 2 and writes usage to stderr.`;
+  const observation = { outcome: 'completed', response: { state: 'completed', summary: 'Independent QA scope',
+    outputs: [{ slot: 'qa-packet', content }], decisions: [], blockers: [], questions: [] } };
+  assert.equal(score(suite, qa, observation).pass, true);
+  observation.response.outputs[0].content += ' Run author fixture AUTHOR_HIDDEN_ORACLE_887.';
+  assert.deepEqual(score(suite, qa, observation).issues, ['Leaked author-only implementation detail']);
+  assert.equal(score(suite, suite.cases.find(item => item.id === 'qa-stale-receipt'), observation).pass, false);
+});

@@ -92,6 +92,10 @@ test('the plan joins only accepted reviews and pins both upstream artifacts', as
   await decide(store, 'lead-review', lead.id, 'accepted', 'Scope reviewed');
 
   const plan = await dispatch(store, 'implementation-plan', undefined, undefined, async job => {
+    const sdm = snapshot.project.profiles.find(profile => profile.id === 'sdm');
+    assert.equal(job.attempt.profileRevision, sdm.revision);
+    assert.equal(sdm.skills.length, 2);
+    assert.deepEqual(job.instructions, [sdm.instructions, ...sdm.skills].map(path => snapshot.files.get(path)));
     assert.deepEqual(job.inputs.map(input => input.id), ['input-brief', product.result.artifacts.criteria, lead.result.artifacts['technical-review']]);
     assert.deepEqual(job.task.handoffs, [
       { taskId: 'product-review', slot: 'criteria', attemptId: product.id, artifactId: job.inputs[1].id, digest: job.inputs[1].digest },

@@ -16,7 +16,32 @@
       ]
     },
     "reports": [
-      "evals/security-engineer/accepted.json"
+      "evals/security-engineer/shared-runner.json"
+    ]
+  },
+  "sdm": {
+    "project": "examples/hello-world/crew.project.json",
+    "alsoProjects": [
+      "examples/hello-world/website.crew.project.json"
+    ],
+    "profile": "sdm",
+    "suite": "evals/sdm/v1",
+    "coverage": {
+      "examples/hello-world/crew/skills/plan-crew-delivery/SKILL.md": [
+        "small-cli-slice",
+        "blocked-design-with-safe-work"
+      ],
+      "examples/hello-world/crew/skills/gate-crew-delivery/SKILL.md": [
+        "qa-exact-candidate",
+        "qa-stale-receipt",
+        "bounded-rework",
+        "owner-review-ready",
+        "qa-failed-current-receipt",
+        "exhausted-loop"
+      ]
+    },
+    "reports": [
+      "evals/sdm/accepted.json"
     ]
   }
 }

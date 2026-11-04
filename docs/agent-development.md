@@ -3,7 +3,8 @@
 A profile owns a work product and a bounded decision. A skill teaches the
 judgment or procedure that improves that work. The eval measures observable
 behavior on the same work product before and after a change. The [Security
-Engineer pilot](security-engineer-pilot.md) is the worked example.
+Engineer pilot](security-engineer-pilot.md) and [SDM pilot](sdm-pilot.md)
+show how this works for reviews and delivery decisions.
 
 1. **Define the job.** Name the decision the role owns, the packet it gets,
    the output the next role needs, and the boundary of its authority. For
@@ -16,7 +17,7 @@ Engineer pilot](security-engineer-pilot.md) is the worked example.
    a research note. Use the profile for enduring beliefs and the skill for
    decision rules. Add a script when it makes a repeatable action more reliable.
 3. **Freeze the assessment before iterating.** Put realistic assignments in
-   `evals/<role>/v1/cases.json`, the common task in `task.json`, and ground
+   `evals/<role>/v1/cases.json`, the task templates in `task.json`, and ground
    truth and scoring in `rubric.json` and `grade.mjs`. Use the same output
    contract as production. Include real failures, safe look-alikes, competing
    requirements, missing evidence, and at least one novel scenario kept out
@@ -33,6 +34,8 @@ Engineer pilot](security-engineer-pilot.md) is the worked example.
    they are withheld during tuning, not a secret benchmark.
 5. **Activate with evidence.** Bump the profile revision and register each
    skill with the cases that exercise its rules in `evals/registry.json`.
+   Use `alsoProjects` for projects with the identical profile and compatible
+   model so that one benchmark covers the shared profile.
    Use the live runner to record a two-sample baseline and candidate for every
    case, including transfer. Review the artifacts for meaningful correctness;
    a keyword match can miss wrong reasoning. Store only synthetic or approved
@@ -40,12 +43,15 @@ Engineer pilot](security-engineer-pilot.md) is the worked example.
    revised cases, task, or rubric under a new version. If extending a suite,
    rerun both variants on the new suite and report that comparison separately.
 
-The current harness supplies plan, diff, and optional verification artifacts
-to the same input-only Codex adapter and validates the same response contract
-as Crew dispatch. It never sends the rubric or case labels. For a role with
-different inputs, adapt the assignment builder and supply its own grader;
-for QA or implementation, run returned checks or patches on isolated fixtures
-and score observed behavior. No live services should be needed by a fixture.
+The harness uses the same input-only Codex adapter and response contract as
+Crew dispatch. It never sends the rubric or case labels. For a role with
+multiple handoff types, put a `tasks` map in `task.json`. Each case picks a
+`task` key and supplies ordered `artifacts` as `[id, title, kind, content]`
+tuples; use the production task templates and representative input evidence.
+The original security suite's single-task format is still supported. For QA
+or implementation, execute the returned checks or patches on isolated
+fixtures and score observed behavior. No live services should be needed by
+a fixture.
 
 Use this outline for the next role:
 
