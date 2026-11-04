@@ -1,0 +1,22 @@
+{
+  "security-engineer": {
+    "project": "examples/hello-world/website.crew.project.json",
+    "profile": "security-engineer",
+    "suite": "evals/security-engineer/v1",
+    "coverage": {
+      "examples/hello-world/crew/skills/review-security-diff/SKILL.md": [
+        "catalog-label",
+        "catalog-label-text",
+        "order-summary",
+        "thumbnail-redirect",
+        "thumbnail-fixed",
+        "telemetry-evidence",
+        "catalog-safety-margin",
+        "export-note"
+      ]
+    },
+    "reports": [
+      "evals/security-engineer/accepted.json"
+    ]
+  }
+}

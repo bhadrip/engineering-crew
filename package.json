@@ -4,5 +4,5 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "bin": { "crew": "./bin/crew.mjs" },
-  "scripts": { "test": "node --test" }
+  "scripts": { "test": "node --test", "eval:check": "node evals/check.mjs" }
 }

@@ -148,7 +148,7 @@ test('task usage counts retries and leaves unpriced attempts visible', async t =
 });
 
 test('implementation blockers gate delivery and a fix loop replaces only candidate-dependent handoffs', async t => {
-  const { control } = await fixture(t);
+  const { control, repo } = await fixture(t);
   const websiteConfig = 'examples/hello-world/website.crew.project.json';
   const snapshot = readProject(control, websiteConfig);
   const run = newRun(snapshot, 'fix-test', websiteConfig);
@@ -164,6 +164,9 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
   }
   const buildId = run.orchestration.buildTask;
   const [ux, visual, lead, security] = run.orchestration.reviewTasks;
+  const securityProfile = snapshot.project.profiles.find(profile => profile.id === 'security-engineer');
+  const [securitySkill] = securityProfile.skills;
+  await writeFile(join(repo, securitySkill), 'Uncommitted skill change');
   const file = run.tasks.find(task => task.packet.id === buildId).packet.outputs[0].path;
   async function seedBuild(content) {
     const id = randomUUID();
@@ -187,8 +190,13 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
   }
   const blocker = { id: 'filter-label', severity: 'blocker', title: 'Label the filter', evidence: 'The select has no label.' };
   const backlog = { id: 'card-spacing', severity: 'backlog', title: 'Refine spacing', evidence: 'The cards use a tight gap.' };
-  const review = (task, findings) => dispatch(store, task, undefined, undefined,
-    async () => completed('findings', JSON.stringify(findings)));
+  const review = (task, findings) => dispatch(store, task, undefined, undefined, async job => {
+    if (task === security) {
+      assert.equal(job.attempt.profileRevision, securityProfile.revision);
+      assert.deepEqual(job.instructions, [securityProfile.instructions, securitySkill].map(path => snapshot.files.get(path)));
+    }
+    return completed('findings', JSON.stringify(findings));
+  });
   const source = '<main>First candidate</main>';
   const first = await seedBuild(source);
   const blocked = await review(ux, [blocker]);
