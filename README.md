@@ -1,9 +1,17 @@
 # Engineering Crew
 
-Engineering Crew gives a project a configurable crew and a place to follow its
-epics. The browser and automation use the same CLI. The Pet Store workflow
-runs Product and Lead reviews, SDM planning and approval, a scoped build,
-independent Docker QA, and delivery review.
+Engineering Crew turns a work brief into a reviewed change you can open as a
+pull request. It splits the work into assignments for specialist agents, runs
+them in sandboxed Codex sessions, and brings in independent reviewers to check
+the same change from multiple angles.
+
+![Engineering Crew workflow. A work brief is split among specialist agents running in sandboxed Codex sessions. Independent reviewers check the change before pull request handoff. The browser UI provides workflow controls, and Langfuse provides optional tracing.](docs/engineering-crew-overview.png)
+
+Define roles and handoffs in Git. Use the browser UI to dispatch tasks and
+follow reviews, with [optional Langfuse tracing](docs/langfuse.md) for a closer
+look.
+
+## Run the pilot
 
 The pilot project is **Pet Store**, with **Beaver Crew** as its configured team.
 Epic 1 proposes a catalog command for the standalone Hello World example.
@@ -11,8 +19,6 @@ Run the implementation with `node examples/hello-world/hello.mjs --list-pets`.
 Epic 2 starts with UX and visual design reviews of a catalog website brief.
 After a prototype build, those designers return alongside the Lead Designer
 and Security Engineer to review the candidate.
-
-## Run the pilot
 
 Use Node.js 22+, Git, a logged-in Codex CLI, and Docker with the pinned Node
 image from `examples/hello-world/crew.project.json` available locally. Run
