@@ -50,12 +50,13 @@ async function api(t, behavior) {
       requests.at(-1).body = body;
       span = JSON.parse(body).resourceSpans[0].scopeSpans[0].spans[0];
       data = {};
-    } else {
+    } else if (span) {
       const attributes = Object.fromEntries(span.attributes.map(attribute => [attribute.key, attribute.value.stringValue]));
       data = { data: [{ id: span.spanId, traceId: span.traceId, projectId: 'test-project', name: span.name,
+        input: attributes['langfuse.observation.input'], output: attributes['langfuse.observation.output'],
         metadata: { receiptSha256: behavior.wrongDigest ? '0'.repeat(64) : attributes['langfuse.observation.metadata.receiptSha256'],
           codexThreadId: attributes['langfuse.observation.metadata.codexThreadId'] } }] };
-    }
+    } else data = { data: [] };
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify(data));
   }).listen(0, '127.0.0.1');
@@ -71,14 +72,23 @@ test('publishes only receipt metadata and exposes a link after a matching observ
   source.env.CREW_LANGFUSE_URL = destination.origin;
   assert.equal(summarize(await source.store.read()).tasks[0].attempts[0].trace, undefined);
   const trace = await publishAttemptTrace(source.store, source.control, 'review', attemptId, source.env);
-  const [, ingestion, verification] = destination.requests;
+  const [, , ingestion, verification] = destination.requests;
   assert.equal(ingestion.headers['x-langfuse-ingestion-version'], '4');
   assert.match(ingestion.body, /"tokens_total"|metadata\.tokens_total/);
-  assert.doesNotMatch(ingestion.body, /private transcript fixture|pk-lf-test|sk-lf-test|langfuse\.observation\.(input|output)/);
+  assert.doesNotMatch(ingestion.body, /private transcript fixture|pk-lf-test|sk-lf-test/);
+  const { attributes } = JSON.parse(ingestion.body).resourceSpans[0].scopeSpans[0].spans[0];
+  const preview = key => JSON.parse(attributes.find(attribute => attribute.key === `langfuse.observation.${key}`).value.stringValue);
+  assert.equal(preview('input').task, 'review');
+  assert.equal(preview('output').outcome, 'completed');
+  assert.equal(preview('output').reportedTokens.total, 53);
   assert.equal(verification.path, '/api/public/v2/observations');
   assert.equal(trace.receiptDigest, source.record.digest);
   assert.equal(verifiedTraceLink(summarize(await source.store.read()).tasks[0].attempts[0].trace), trace.url);
   assert.equal(verifiedTraceLink({ ...trace, url: trace.url.replace(destination.origin, 'https://outside.invalid') }), null);
+
+  const again = await publishAttemptTrace(source.store, source.control, 'review', attemptId, source.env);
+  assert.equal(again.url, trace.url);
+  assert.equal(destination.requests.filter(request => request.path === '/api/public/otel/v1/traces').length, 1);
 
   behavior.wrongProject = true;
   await assert.rejects(publishAttemptTrace(source.store, source.control, 'review', attemptId, source.env), /configured project/);

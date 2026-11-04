@@ -22,10 +22,10 @@ project, submits the OTLP span, and reads back its trace ID, observation ID,
 native Codex thread ID, and receipt digest. Repeating the command uses the
 same trace identifiers. Langfuse may require sign-in to open its viewer.
 
-The span contains allowlisted run and task IDs, Git revision, receipt digest,
-Codex thread ID and outcome, timing, and reported token counts. Prompts,
-responses, transcripts, tool payloads, source text, and credentials are outside
-the export. New receipts carry Codex process timing. For older receipts, the
-span is labeled **Crew attempt with Codex receipt** and uses the recorded
-attempt interval. A failed publication leaves the local handoff and QA results
-available. The viewer links only observations that were verified by read-back.
+The trace opens the selected observation's Preview. Input shows the Crew task
+reference. Output shows the recorded Codex outcome, timing, and reported token
+counts. These fields summarize the receipt. Prompts, model responses,
+transcripts, tool payloads, source text, and credentials stay local. New
+receipts carry Codex process timing. Older receipts use the Crew attempt
+interval. The viewer links only observations verified by read-back. A failed
+publication leaves the local handoff and QA results available.
