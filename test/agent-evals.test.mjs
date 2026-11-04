@@ -59,3 +59,23 @@ test('SDM cases use distinct production slots and the QA grader rejects a leaked
   assert.deepEqual(score(suite, qa, observation).issues, ['Leaked author-only implementation detail']);
   assert.equal(score(suite, suite.cases.find(item => item.id === 'qa-stale-receipt'), observation).pass, false);
 });
+
+test('the Lead Engineer gate rejects a prose-only block and requires an actionable agreement artifact', async () => {
+  const entry = json('evals/registry.json')['lead-engineer'];
+  const suite = await loadSuite(entry.suite);
+  const item = suite.cases.find(item => item.id === 'same-test-twice');
+  const packet = assignment(suite, item);
+  assert.equal(packet.task.outputs[0].id, 'agreement');
+  assert.deepEqual(packet.inputs.map(input => input.id), ['technical-review', 'plan']);
+  assert.doesNotMatch(JSON.stringify(packet), /same-test-twice|rubric/);
+
+  const content = 'Block test-r4: rerunning hello.test.mjs is not independent QA. Derive separate checks from the criteria at the CLI boundary and assert stdout, stderr and exit status.';
+  const observation = { outcome: 'completed', response: { state: 'blocked', summary: 'Block test-r4', blockers: ['QA is not independent.'],
+    decisions: [], questions: [], outputs: [{ slot: 'agreement', content }] } };
+  assert.equal(score(suite, item, observation).pass, true);
+  observation.response.state = 'completed';
+  assert.equal(score(suite, item, observation).pass, false);
+  observation.response.state = 'blocked';
+  observation.response.outputs = [];
+  assert.deepEqual(score(suite, item, observation).issues, ['Missing downstream artifact']);
+});

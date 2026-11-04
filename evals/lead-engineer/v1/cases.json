@@ -1,0 +1,178 @@
+[
+  {
+    "id": "cli-argument-precedence",
+    "split": "regression",
+    "task": "lead-review",
+    "artifacts": [
+      [
+        "brief",
+        "Approved brief and constraints",
+        "markdown",
+        "CAT-1: reserve --list-pets as a sole argument and print the fictional catalog JSON array on stdout with one final newline, empty stderr, and exit 0. CAT-2: retain greeting for no args and any single name other than the reserved flag (including a quoted name containing spaces and other strings beginning with --). CAT-3: retain usage error for two or more args (empty stdout, exact existing usage on stderr and exit 1). Owner allows only hello.mjs and hello.test.mjs. No dependencies. A stakeholder proposes checking the first token for --list-pets before checking argument count."
+      ],
+      [
+        "cli-source",
+        "Committed source excerpt",
+        "source",
+        "// hello.mjs\nconst [name, ...extra] = process.argv.slice(2);\nif (extra.length) {\n  console.error('Usage: node hello.mjs [name]');\n  process.exitCode = 1;\n} else {\n  console.log(name === undefined ? 'Hello, World!' : 'Hello, ' + name + '!');\n}"
+      ],
+      [
+        "cli-tests",
+        "Committed author test excerpt",
+        "source",
+        "// hello.test.mjs: tests only the existing no-arg and a two-token call.\n// Both assertions inspect stdout and stderr via spawnSync."
+      ]
+    ]
+  },
+  {
+    "id": "piped-export",
+    "split": "regression",
+    "task": "lead-design",
+    "artifacts": [
+      [
+        "brief",
+        "Approved brief and constraints",
+        "markdown",
+        "CAT-1: add --export as a sole argument to write the full catalog snapshot (up to 4 MiB) to stdout with a final newline, empty stderr, exit 0. Consumers pipe stdout to a slow downstream reader on Linux. CAT-2 and CAT-3 keep existing greeting and usage semantics. Only export.mjs and export.test.mjs may change, with no dependencies. The suggested success branch writes the entire payload and immediately calls process.exit(0)."
+      ],
+      [
+        "cli-source",
+        "Committed source excerpt",
+        "source",
+        "// export.mjs, proposed branch uses Node.js stdout\nif (process.argv.length === 3 && process.argv[2] === '--export') {\n  process.stdout.write(JSON.stringify(snapshot) + '\\n');\n  process.exit(0);\n} else {\n  runLegacyCli(process.argv.slice(2));\n}"
+      ],
+      [
+        "cli-tests",
+        "Committed author test excerpt",
+        "source",
+        "// export.test.mjs\n// The tiny snapshot test checks JSON and exit status, with a 512-byte fixture.\n// There is no large piped-output check."
+      ]
+    ]
+  },
+  {
+    "id": "retry-after-commit",
+    "split": "regression",
+    "task": "lead-design",
+    "artifacts": [
+      [
+        "brief",
+        "Approved brief and constraints",
+        "markdown",
+        "The offline catalog import client retries on timeout; CAT-1 requires that each logical import create at most one job, even if the server commits but the response is lost or the process restarts. CAT-2: two intentionally separate imports with identical payloads create two jobs. CAT-3: retry returns the original job ID. The same caller can supply a stable operation ID per logical import. The local database can atomically write job and request mapping with a uniqueness constraint. Scope: imports.mjs and imports.test.mjs; database migration of the request table is already approved and provisioned. Another proposal is a memory cache by payload hash."
+      ],
+      [
+        "cli-source",
+        "Committed source excerpt",
+        "source",
+        "// imports.mjs\nexport async function createImport(db, account, payload) {\n  const job = await db.jobs.insert({account, payload});\n  return {jobId: job.id};\n}"
+      ],
+      [
+        "cli-tests",
+        "Committed author test excerpt",
+        "source",
+        "// imports.test.mjs\n// Existing author check sends one successful import and asserts an ID exists.\n// The fixture database can inject response loss after commit and survive a client restart."
+      ]
+    ]
+  },
+  {
+    "id": "approve-with-optional-note",
+    "split": "regression",
+    "task": "lead-signoff",
+    "artifacts": [
+      [
+        "technical-review",
+        "Accepted technical review and gates",
+        "markdown",
+        "CLI review: preserve the no-argument greeting and two-argument error; the new flag works only as a sole argument. CAT-1 must check parsed JSON and the final newline; CAT-2 greeting and CAT-3 usage are unchanged. Approved writes: hello.mjs and hello.test.mjs. Separate author tests from independent QA of the exact candidate. Renaming renderCatalog to formatCatalog is optional and irrelevant to observable behavior."
+      ],
+      [
+        "plan",
+        "Submitted implementation plan",
+        "markdown",
+        "Plan revision cli-r7. Use the existing argument count gate before routing --list-pets. Only edit hello.mjs and hello.test.mjs, no dependencies. Author runs node --test hello.test.mjs on the candidate; independent QA launches the candidate CLI from CAT-1/2/3 using its own cases and oracle, asserting the exact status, stdout and stderr (including JSON final newline, ordinary and quoted greetings, and --list-pets with extra args). Required Product agreement is recorded for cli-r7. The function name remains renderCatalog."
+      ]
+    ]
+  },
+  {
+    "id": "same-test-twice",
+    "split": "regression",
+    "task": "lead-signoff",
+    "artifacts": [
+      [
+        "technical-review",
+        "Accepted technical review and gates",
+        "markdown",
+        "Approved writes: hello.mjs and hello.test.mjs. CAT-1, CAT-2, CAT-3 require independent verification against the exact candidate at the CLI process boundary: arguments, stdout, stderr and exit status. Author tests are useful but do not stand in for independent evidence. Product approved these requirements."
+      ],
+      [
+        "plan",
+        "Submitted implementation plan",
+        "markdown",
+        "Plan revision test-r4. Scope and parser behavior match the accepted review. Author writes hello.test.mjs and runs it in a pinned Docker image. An independent QA actor reruns precisely node --test hello.test.mjs on the same candidate, using the same fixtures and expected values without authoring any black-box checks of its own. Both passing receipts will count as CAT-1 through CAT-3 approval."
+      ]
+    ]
+  },
+  {
+    "id": "rollback-schema",
+    "split": "regression",
+    "task": "lead-signoff",
+    "artifacts": [
+      [
+        "technical-review",
+        "Accepted technical review and gates",
+        "markdown",
+        "Catalog workers roll gradually and both versions can run together for 30 minutes. CAT-1 requires continuity during the rollout; CAT-2 requires restoring the previous worker binary within 5 minutes if errors increase; CAT-3 requires preserving writes made during rollout. Previous workers read and write catalog.item_label and cannot use catalog.display_label. Paths already allowed: worker.mjs, worker.test.mjs, migration.sql. A separate cleanup release is allowed after old workers and rollback exposure end."
+      ],
+      [
+        "plan",
+        "Submitted implementation plan",
+        "markdown",
+        "Plan revision schema-r9. First rename catalog.item_label to catalog.display_label and then deploy workers gradually. New workers only use display_label. Rollback is simply restoring the old binary; the migration remains applied. QA will use a fresh database with only new workers; author tests cover the same schema. The current plan otherwise stays in scope."
+      ]
+    ]
+  },
+  {
+    "id": "read-only-retry",
+    "split": "transfer",
+    "task": "lead-design",
+    "artifacts": [
+      [
+        "brief",
+        "Approved brief and constraints",
+        "markdown",
+        "CAT-1: improve catalog lookup resilience with one retry on a transient network timeout inside the original total 250 ms deadline. CAT-2: do not retry a 404 or any other permanent status. CAT-3: after the deadline, preserve the existing timeout error. The existing internal GET endpoint has no side effects and its response may legitimately change between reads; client does not promise a snapshot. Scope is lookup.mjs and lookup.test.mjs. No changes to the API or dependencies."
+      ],
+      [
+        "cli-source",
+        "Committed source excerpt",
+        "source",
+        "// lookup.mjs\nexport async function lookup(key, read, deadline) {\n  return read(key, {deadline});\n}"
+      ],
+      [
+        "cli-tests",
+        "Committed author test excerpt",
+        "source",
+        "// lookup.test.mjs\n// Author fixtures can use a deterministic fake clock and a sequenced transport.\n// No live network is permitted in the test runner."
+      ]
+    ]
+  },
+  {
+    "id": "unmeasurable-latency",
+    "split": "transfer",
+    "task": "lead-signoff",
+    "artifacts": [
+      [
+        "technical-review",
+        "Accepted technical review and gates",
+        "markdown",
+        "Catalog export CAT-1 is a required p99 <= 150 ms at 40 concurrent export requests using the representative 200k-record dataset on approved staging. CAT-2 retains output correctness. CAT-3 prohibits network and credential use in the current runner. Only export.mjs and export.test.mjs may change. The approved staging test rig is not available to this workflow. Product owner can change acceptance scope; no scope change has been approved."
+      ],
+      [
+        "plan",
+        "Submitted implementation plan",
+        "markdown",
+        "Plan revision perf-r3. Implement the proposed streaming export within the two files and retain the response format. The author and independent QA will each run a separate 10-record single-request smoke test in the local container. If both smoke tests pass, record that the plan covers CAT-1 and build immediately. Any load test in approved staging is optional after sign-off."
+      ]
+    ]
+  }
+]

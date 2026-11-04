@@ -1,0 +1,146 @@
+{
+  "tasks": {
+    "lead-review": {
+      "id": "lead-review",
+      "revision": 1,
+      "title": "Lead Engineer review",
+      "profileId": "lead-engineer",
+      "objective": "Propose the smallest design for the catalog and an independent test strategy.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [],
+      "inputs": [
+        "brief",
+        "cli-source",
+        "cli-tests"
+      ],
+      "handoffInputs": [],
+      "outputs": [
+        {
+          "id": "technical-review",
+          "title": "Technical review",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Describe argument precedence, allowed files, risks, and author and QA checks."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-brief.md",
+          "examples/hello-world/hello.mjs",
+          "examples/hello-world/hello.test.mjs"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    "lead-signoff": {
+      "id": "lead-signoff",
+      "revision": 1,
+      "title": "Lead Engineer plan agreement",
+      "profileId": "lead-engineer",
+      "objective": "Approve the received plan if it can be implemented and tested within the agreed scope. Return a completed result only for approval. Otherwise return blocked with the needed change.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "implementation-plan",
+        "lead-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "implementation-plan",
+          "slot": "plan"
+        },
+        {
+          "task": "lead-review",
+          "slot": "technical-review"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "agreement",
+          "title": "Lead Engineer agreement",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Explicitly record the decision on the received plan and the reason."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    },
+    "lead-design": {
+      "id": "lead-review",
+      "revision": 1,
+      "title": "Lead Engineer review",
+      "profileId": "lead-engineer",
+      "objective": "Propose the smallest technical design for the requested catalog change and an independent test strategy.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [],
+      "inputs": [
+        "brief",
+        "cli-source",
+        "cli-tests"
+      ],
+      "handoffInputs": [],
+      "outputs": [
+        {
+          "id": "technical-review",
+          "title": "Technical review",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Describe argument precedence, allowed files, risks, and author and QA checks."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-brief.md",
+          "examples/hello-world/hello.mjs",
+          "examples/hello-world/hello.test.mjs"
+        ]
+      },
+      "acceptedBy": "SDM"
+    }
+  }
+}
