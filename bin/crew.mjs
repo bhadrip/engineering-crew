@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { CrewError, id, requireField } from '../lib/contracts.mjs';
 import { gitControl, readProject } from '../lib/git-control.mjs';
 import { listRuns, runStore } from '../lib/run-store.mjs';
-import { attachCandidateDiff, decide, dispatch, dispatchInitial, findArtifact, newRun, publishAttemptTrace, requestFix, summarize, triageRun, workspaceCatalog } from '../lib/workflow.mjs';
+import { attachCandidateDiff, decide, dispatch, dispatchInitial, findArtifact, newRun, publishAttemptTrace, requestFix, resolveResource, summarize, triageRun, workspaceCatalog } from '../lib/workflow.mjs';
 
 const usage = `Engineering Crew
 
@@ -14,6 +14,7 @@ crew run start <run> --project <Git path> [--ref <ref>] [--no-dispatch] [--event
 crew run show <run>
 crew run triage <run> --owner <owner> --note <reason> [--assign <task=profile>]... [--no-dispatch] [--events]
 crew run fix <run> <build-attempt> --note <reason>
+crew resource resolve <run> <request> --note <setup or alternative> [--events]
 crew task dispatch <run> <task> [--events] [--capture-activity]
 crew task decide <run> <task> <attempt> <accepted|rework> --note <reason>
 crew task attach-diff <run> <task> <build-task>
@@ -63,7 +64,7 @@ async function main() {
   if (values.help || !positionals.length) { process.stdout.write(`${usage}\n`); return; }
   const [group, action, ...args] = positionals;
   const expected = { 'project validate': 0, 'project show': 0, 'workspace show': 0, 'run start': 1, 'run show': 1, 'run triage': 1, 'run fix': 2,
-    'task dispatch': 2, 'task decide': 4, 'task attach-diff': 3, 'artifact read': 2, 'trace publish': 2 };
+    'resource resolve': 2, 'task dispatch': 2, 'task decide': 4, 'task attach-diff': 3, 'artifact read': 2, 'trace publish': 2 };
   const command = `${group} ${action}`;
   if (!(group === 'ui' && positionals.length <= 2) && expected[command] !== args.length) {
     throw new CrewError('Unknown command or incorrect arguments. See crew --help.', 2);
@@ -108,6 +109,14 @@ async function main() {
     return emit({ triage }, values.events);
   }
   if (command === 'run fix') return emit({ fixLoop: await requestFix(store, taskId, values.note) });
+  if (command === 'resource resolve') {
+    const onStart = values.events ? attempts => emit({ event: 'resource.resolved', runId, attempts }, true) : undefined;
+    const result = await withAttemptSignal(signal => resolveResource(store, taskId, values.note, signal, onStart, undefined, control,
+      { captureActivity: values['capture-activity'] }));
+    emit(result, values.events);
+    if (result.attempts.some(unsuccessful)) process.exitCode = 5;
+    return;
+  }
   if (command === 'artifact read') return emit({ artifact: findArtifact(await store.read(), taskId) });
   if (command === 'trace publish') return emit({ trace: await publishAttemptTrace(store, control, taskId, values.attempt, process.env,
     { includeActivity: values['include-activity'] }) });

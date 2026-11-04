@@ -169,6 +169,11 @@ button.secondary:hover, .search-submit:hover { background: var(--surface); }
 .triage-form .decision { width: min(30rem, 100%); }
 .triage-form .buttons { margin-top: .35rem; }
 .triage-links { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
+.attention-panel { max-width: 54rem; }
+.resource-card { border: 1px solid var(--line); border-radius: .75rem; padding: 1rem; margin: .85rem 0; overflow-wrap: anywhere; }
+.resource-card:target { border-color: var(--accent); }
+.resource-card .section-title { flex-wrap: wrap; }
+.resource-card .decision { width: min(30rem, 100%); }
 textarea { width: 100%; resize: vertical; padding: .4rem; border: 1px solid #cbd2db; border-radius: .3rem; }
 .buttons { display: flex; flex-wrap: wrap; gap: .4rem; }
 .columns { display: grid; grid-template-columns: minmax(12rem,16rem) minmax(0,1fr); gap: 1rem; align-items: start; }
@@ -211,6 +216,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
   .epic-row > :first-child, .epic-row > :last-child { grid-column: 1 / -1; }
 }
 @media (max-width: 480px) {
+  .mast-inner { flex-wrap: wrap; gap: .15rem 1.15rem; padding-block: .45rem; }
+  .mast nav { flex-wrap: wrap; }
   .view-tabs { gap: .25rem 1rem; }
   .epic-search { width: 100%; margin-bottom: .65rem; }
   .event-list li { grid-template-columns: .55rem minmax(0,1fr); }

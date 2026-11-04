@@ -49,6 +49,69 @@ receive their attempt IDs as soon as they start, or `--no-dispatch` on
 `run start` or `run triage` to prepare a run for manual dispatch. Dependent
 tasks become available to dispatch after their required handoffs are accepted.
 
+## Resolve resource requests
+
+Open **Needs attention** in the project navigation to see open requests across
+work briefs. A request names the action, exact target, and reason and links to
+the handoff and execution receipt. For manual setup, create or configure the
+resource, then choose **Confirm resource ready** with a short record of what
+is available. Use non-secret identifiers in requests and confirmations.
+
+When the last request for a handoff is resolved, Crew starts a new attempt
+for that handoff and includes the resolution records as inputs. Paused
+attempts stay in history and do not count against the packet's rework limit.
+Downstream tasks still wait for an accepted handoff. The CLI uses the same
+record and resolution path.
+
+```sh
+node bin/crew.mjs run show <run>
+node bin/crew.mjs resource resolve <run> <request-id> --note "Catalog table is ready in dev."
+```
+
+Administrators can add `resourcePolicy` to the committed project JSON. Rules
+are pinned when the run starts. Exact action and target rules take precedence
+over action-wide rules. Unmatched requests use manual setup.
+
+```json
+{
+  "resourcePolicy": {
+    "rules": [
+      { "action": "create-database", "mode": "deny" },
+      { "action": "create-account", "target": "OpenRouter", "mode": "manual" },
+      { "action": "create-table", "target": "dev.catalog", "mode": "auto" }
+    ]
+  }
+}
+```
+
+- **Manual** waits for operator confirmation.
+- **Deny** offers **Continue with alternative**. Crew records the denial and
+  sends the alternative to the paused handoff.
+- **Auto** requires an exact target and a matching local provisioner.
+  An unavailable or failed provisioner leaves the request in the queue
+  for manual setup.
+
+To register an automatic provisioner, place an array of entries in
+`engineering-crew/provisioners.json` under the checkout's Git directory.
+Restrict write access to the local administrator. Each entry binds one
+project, action, and target to a fixed executable and arguments.
+
+```json
+[
+  {
+    "project": "pet-store",
+    "action": "create-table",
+    "target": "dev.catalog",
+    "command": ["/opt/crew/bin/ensure-dev-catalog"]
+  }
+]
+```
+
+Use an idempotent executable that exits successfully once the resource is
+ready. Crew runs the fixed command directly with a 30-second limit and
+records its outcome. Provider credentials belong in the provisioner's
+credential store.
+
 ## Review and fix a candidate
 
 An implementation review reports findings on a specific candidate diff. A
