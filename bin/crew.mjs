@@ -11,11 +11,11 @@ crew project validate --project <Git path> [--ref <ref>]
 crew workspace show
 crew run start <run> --project <Git path> [--ref <ref>]
 crew run show <run>
-crew task dispatch <run> <task> [--events]
+crew task dispatch <run> <task> [--events] [--capture-activity]
 crew task decide <run> <task> <attempt> <accepted|rework> --note <reason>
 crew task attach-diff <run> <task> <build-task>
 crew artifact read <run> <artifact>
-crew trace publish <run> <task> [--attempt <id>]
+crew trace publish <run> <task> [--attempt <id>] [--include-activity]
 crew ui [run] [--project-id <project>] [--port <port>]
 
 Set --repo <checkout> to use a different repository. Default is the current directory.`;
@@ -31,7 +31,8 @@ async function main() {
       repo: { type: 'string', default: process.cwd() }, project: { type: 'string' },
       'project-id': { type: 'string' },
       ref: { type: 'string', default: 'HEAD' }, note: { type: 'string' }, port: { type: 'string' }, attempt: { type: 'string' },
-      events: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+      events: { type: 'boolean' }, 'capture-activity': { type: 'boolean' }, 'include-activity': { type: 'boolean' },
+      help: { type: 'boolean', short: 'h' },
     } });
   } catch (error) { throw new CrewError(error.message, 2); }
   const { values, positionals } = parsed;
@@ -70,7 +71,8 @@ async function main() {
   const store = runStore(control.gitDir, runId);
   if (command === 'run show') return emit({ run: summarize(await store.read()) });
   if (command === 'artifact read') return emit({ artifact: findArtifact(await store.read(), taskId) });
-  if (command === 'trace publish') return emit({ trace: await publishAttemptTrace(store, control, taskId, values.attempt) });
+  if (command === 'trace publish') return emit({ trace: await publishAttemptTrace(store, control, taskId, values.attempt, process.env,
+    { includeActivity: values['include-activity'] }) });
   if (command === 'task decide') return emit({ decision: await decide(store, taskId, attemptId, disposition, values.note) });
   if (command === 'task attach-diff') return emit({ revision: await attachCandidateDiff(store, control, taskId, attemptId) });
 
@@ -79,7 +81,8 @@ async function main() {
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop);
   try {
     const onStart = values.events ? attemptId => emit({ event: 'attempt.started', attemptId }, true) : undefined;
-    const attempt = await dispatch(store, taskId, controller.signal, onStart, undefined, control);
+    const attempt = await dispatch(store, taskId, controller.signal, onStart, undefined, control,
+      { captureActivity: values['capture-activity'] });
     emit(values.events ? { event: 'attempt.finished', attempt } : { attempt }, values.events);
     if (attempt.outcome !== 'completed' || attempt.result?.state !== 'completed') process.exitCode = 5;
   } finally {

@@ -329,7 +329,9 @@ function handoffArtifacts(task) {
 
 function traceLink(attempt) {
   const url = verifiedTraceLink(attempt?.trace);
-  return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">Open Langfuse trace<span aria-hidden="true">↗</span></a>` : '';
+  if (!url) return '';
+  const label = attempt.trace.activityDigests ? 'View activity in Langfuse' : 'View Codex receipt in Langfuse';
+  return `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${label}<span aria-hidden="true">↗</span></a>`;
 }
 
 function evidenceLinks(run, taskId, ids, attempt, view) {
@@ -337,6 +339,7 @@ function evidenceLinks(run, taskId, ids, attempt, view) {
   const records = links(run, taskId, ids, view);
   if (trace) return `${records}<ul class="links trace-link"><li>${trace}</li></ul>`;
   if (attempt?.trace?.status === 'unverified') return `${records}<p class="muted trace-state">${escape(attempt.trace.error)}</p>`;
+  if (attempt?.activityId) return `${records}<p class="muted trace-state">Captured activity is awaiting Langfuse publication.</p>`;
   return records;
 }
 

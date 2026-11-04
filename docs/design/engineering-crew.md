@@ -328,17 +328,19 @@ host and Docker runs explicitly and validate the required environment. The
 runner should record observed results even when the command fails.
 
 **Langfuse drills into selected activity.** Capture is off by default. Publish
-one completed Codex receipt explicitly to a configured loopback project. The
-span correlates the project, epic, run, task, role, Git revision, attempt, and
-native thread. The UI links to the observation after verifying the IDs and
-receipt digest in Langfuse. Docker results and QA verdicts remain available
-independently of telemetry.
+one completed Codex receipt explicitly to a configured loopback project. An
+opted-in dispatch can also retain the exact assignment and final response for
+a separate activity export, with Git and Docker actions recorded as Crew
+runner observations. The span correlates the project, epic, run, task, role,
+Git revision, attempt, and native thread. The UI links to the observation
+after verifying the exported records in Langfuse. Docker results and QA
+verdicts remain available independently of telemetry.
 
 Keep Langfuse keys in a private file outside the checkout. The publisher
 validates the target and verifies that the key belongs to the configured
-project. The payload uses allowlisted receipt fields and no transcript data.
-An automatic capture flow would require separate configuration and a trusted
-selection policy. [Local Langfuse setup](../langfuse.md)
+project. A default export uses allowlisted receipt fields. Activity exports
+can include committed inputs and generated artifacts, so select a destination
+authorized to hold them. [Local Langfuse setup](../langfuse.md)
 
 ## Hello World pet store walkthrough
 
@@ -465,9 +467,9 @@ reference and build the acceptance walkthrough from the real Hello World run.
 
 The staged `project-crew-telemetry-stage` extraction informed the Langfuse
 target validation, private credentials, explicit selection, and API read-back.
-The first adapter publishes allowlisted runtime receipt metadata over OTLP
-from the CLI. A future native transcript exporter would need its own review
-and integration tests.
+The adapter publishes runtime receipt metadata over OTLP from the CLI.
+Activity exports use the assignment and final response captured by the Codex
+adapter and the evidence recorded by the Crew runner.
 
 For discussion, confirm the four contract shapes, the first Codex execution
 slice, and whether the catalog command gives Product and QA enough to review.

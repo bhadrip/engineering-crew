@@ -37,7 +37,7 @@ async function fixture(t) {
 
 async function api(t, behavior) {
   const requests = [];
-  let span;
+  const traces = new Map();
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, 'http://127.0.0.1');
     requests.push({ path: url.pathname, headers: request.headers });
@@ -48,15 +48,20 @@ async function api(t, behavior) {
       let body = '';
       for await (const chunk of request) body += chunk;
       requests.at(-1).body = body;
-      span = JSON.parse(body).resourceSpans[0].scopeSpans[0].spans[0];
+      const spans = JSON.parse(body).resourceSpans[0].scopeSpans[0].spans;
+      traces.set(spans[0].traceId, spans);
       data = {};
-    } else if (span) {
-      const attributes = Object.fromEntries(span.attributes.map(attribute => [attribute.key, attribute.value.stringValue]));
-      data = { data: [{ id: span.spanId, traceId: span.traceId, projectId: 'test-project', name: span.name,
-        input: attributes['langfuse.observation.input'], output: attributes['langfuse.observation.output'],
-        metadata: { receiptSha256: behavior.wrongDigest ? '0'.repeat(64) : attributes['langfuse.observation.metadata.receiptSha256'],
-          codexThreadId: attributes['langfuse.observation.metadata.codexThreadId'] } }] };
-    } else data = { data: [] };
+    } else {
+      const spans = traces.get(url.searchParams.get('traceId')) ?? [];
+      data = { data: spans.filter(span => !behavior.omitChildren || !span.parentSpanId).map(span => {
+        const attributes = Object.fromEntries(span.attributes.map(attribute => [attribute.key, attribute.value.stringValue]));
+        const metadata = Object.fromEntries(Object.entries(attributes).filter(([key]) => key.startsWith('langfuse.observation.metadata.'))
+          .map(([key, value]) => [key.split('.').at(-1), value]));
+        if (behavior.wrongDigest) metadata.receiptSha256 = '0'.repeat(64);
+        return { id: span.spanId, traceId: span.traceId, projectId: 'test-project', name: span.name, parentObservationId: span.parentSpanId,
+          input: attributes['langfuse.observation.input'], output: attributes['langfuse.observation.output'], metadata };
+      }) };
+    }
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify(data));
   }).listen(0, '127.0.0.1');
@@ -110,6 +115,55 @@ test('rejects a different project before upload and rejects a mismatched receipt
   behavior.wrongProject = false;
   behavior.wrongDigest = true;
   await assert.rejects(publishLangfuse(config, span, { retries: 0 }), /could not be verified/);
+});
+
+test('publishes opted-in prompt, final reply and Docker observations for the selected attempt', async t => {
+  const source = await fixture(t);
+  const behavior = {};
+  const destination = await api(t, behavior);
+  source.env.CREW_LANGFUSE_URL = destination.origin;
+  const publish = options => publishAttemptTrace(source.store, source.control, 'review', attemptId, source.env, options);
+  const options = { includeActivity: true };
+  await assert.rejects(publish(options), /no captured prompt and response/);
+  assert.equal(destination.requests.length, 0);
+
+  const activity = { prompt: 'Exact assignment\nwith a trailing newline\n', response: '{ "state": "completed" }\n', toolCalls: [] };
+  const checks = { testedCommit: 'b'.repeat(40), image: 'pinned-image', checks: [{
+    id: 'usage-error', command: ['node', 'hello.mjs', 'one', 'two'], startedAt: source.attempt.startedAt, endedAt: source.attempt.endedAt,
+    observed: { stdout: '', stderr: 'Usage\n', exitCode: 1 }, passed: true,
+  }] };
+  const provenance = { source: 'runtime', attemptId };
+  const activityRecord = artifact('activity-1', 'Codex activity', 'json', JSON.stringify(activity), provenance);
+  const checkRecord = artifact('check-1', 'Docker receipt', 'json', JSON.stringify(checks), provenance);
+  await source.store.update(run => {
+    run.tasks[0].packet.title = 'Independent QA';
+    Object.assign(run.tasks[0].attempts[0], { activityId: activityRecord.id, runnerArtifacts: { 'check-receipt': checkRecord.id } });
+    run.artifacts.push(activityRecord, checkRecord);
+  });
+  const receiptTrace = await publish();
+  assert.doesNotMatch(destination.requests.find(request => request.body).body, /Exact assignment|usage-error/);
+  const trace = await publish(options);
+  assert.notEqual(trace.url, receiptTrace.url);
+  const ingested = destination.requests.filter(request => request.body).at(-1).body;
+  assert.doesNotMatch(ingested, /private transcript fixture|pk-lf-test|sk-lf-test/);
+  const [root, docker] = JSON.parse(ingested).resourceSpans[0].scopeSpans[0].spans;
+  const preview = (span, key) => JSON.parse(span.attributes.find(attribute => attribute.key === `langfuse.observation.${key}`).value.stringValue);
+  assert.equal(preview(root, 'input'), activity.prompt);
+  assert.equal(preview(root, 'output'), activity.response);
+  assert.equal(docker.parentSpanId, root.spanId);
+  assert.deepEqual(preview(docker, 'input').command, checks.checks[0].command);
+  assert.deepEqual(preview(docker, 'output'), { ...checks.checks[0].observed, passed: true });
+  assert.deepEqual(trace.activityDigests, { [activityRecord.id]: activityRecord.digest, [checkRecord.id]: checkRecord.digest });
+
+  const config = await langfuseConfig(source.control, source.env);
+  const run = await source.store.read();
+  const span = langfuseSpan({ ...source, task: run.tasks[0], activity, checks, activityDigests: trace.activityDigests }, config.projectId);
+  behavior.omitChildren = true;
+  await assert.rejects(publishLangfuse(config, span, { retries: 0 }), /could not be verified/);
+  await publish();
+  assert.equal(verifiedTraceLink(summarize(await source.store.read()).tasks[0].attempts[0].trace), trace.url);
+  await source.store.update(run => { run.artifacts.find(value => value.id === checkRecord.id).content = '{}'; });
+  assert.equal(summarize(await source.store.read()).tasks[0].attempts[0].trace.status, 'unverified');
 });
 
 test('credentials are restricted to a private file outside the checkout and an explicit loopback URL', async t => {
