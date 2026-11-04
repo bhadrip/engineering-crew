@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { candidateDiff, createCandidate, gitControl, readProject } from '../lib/git-control.mjs';
 import { currentAttempt } from '../lib/attempts.mjs';
 import { validateProject } from '../lib/contracts.mjs';
 import { artifact, runStore } from '../lib/run-store.mjs';
-import { decide, dispatch, findArtifact, newRun, requestFix, summarize, workspaceCatalog } from '../lib/workflow.mjs';
+import { decide, dispatch, dispatchInitial, findArtifact, newRun, requestFix, summarize, triageRun, workspaceCatalog } from '../lib/workflow.mjs';
 
 const config = 'examples/hello-world/crew.project.json';
+const websiteConfig = 'examples/hello-world/website.crew.project.json';
 
 async function fixture(t) {
   const repo = await mkdtemp(join(tmpdir(), 'crew-test-'));
@@ -46,6 +48,133 @@ test('permission requests beyond the input-only runtime are rejected before disp
   git('add', config);
   git('-c', 'user.name=Crew Test', '-c', 'user.email=crew@example.invalid', 'commit', '-qm', 'Request write access');
   assert.throws(() => readProject(control, config), /input-only permissions/);
+});
+
+test('the static team is recorded at intake and existing runs still dispatch', async t => {
+  const { control, snapshot } = await fixture(t);
+  const run = newRun(snapshot, 'static', config);
+  const store = runStore(control.gitDir, run.id);
+  await store.create(run);
+  assert.equal(run.triage.status, 'assigned');
+  assert.equal(run.triage.mode, 'static');
+  assert.equal(run.triage.brief.digest, findArtifact(run, 'input-brief').digest);
+  assert.deepEqual(run.triage.assignments.map(assignment => assignment.profileId), snapshot.project.tasks.map(task => task.profileId));
+  await assert.rejects(triageRun(store, 'SDM', 'Replace the team'), /not awaiting triage/);
+  const execute = async () => ({ outcome: 'execution-failed', receipt: {} });
+  const attempt = await dispatch(store, 'product-review', undefined, undefined, execute);
+  assert.equal(attempt.triageArtifactId, run.triage.artifactId);
+
+  const legacy = runStore(control.gitDir, 'legacy');
+  const record = newRun(snapshot, 'legacy', config);
+  record.artifacts = record.artifacts.filter(value => value.id !== record.triage.artifactId);
+  delete record.triage;
+  await legacy.create(record);
+  const legacyAttempt = await dispatch(legacy, 'product-review', undefined, undefined, execute);
+  assert.equal(legacyAttempt.triageArtifactId, undefined);
+});
+
+test('manual triage gates dispatch and saves exactly one complete team for the pinned brief', async t => {
+  const { control } = await fixture(t);
+  const run = newRun(readProject(control, websiteConfig), 'intake', websiteConfig);
+  const store = runStore(control.gitDir, run.id);
+  await store.create(run);
+  const override = { taskId: 'website-build', profileId: 'frontend-engineer' };
+  const approve = (owner, ...overrides) => triageRun(store, owner, 'The brief needs responsive interactions.', overrides);
+
+  assert.equal(workspaceCatalog([run])[0].epics[0].runs[0].triagePending, true);
+  await assert.rejects(dispatch(store, 'ux-review'), /Confirm team assignments/);
+  await assert.rejects(approve('Product Manager', override), /configured triage owner/);
+  await assert.rejects(approve('SDM', override, override), /Duplicate assignment/);
+  await assert.rejects(approve('SDM', override, { taskId: 'security-engineer-review', profileId: 'engineer' }), /not eligible/);
+  assert.deepEqual(await store.read(), JSON.parse(JSON.stringify(run)));
+
+  const results = await Promise.allSettled([approve('Principal Engineer', override), approve('Tech Lead', override)]);
+  const [saved] = results.filter(result => result.status === 'fulfilled');
+  const [rejected] = results.filter(result => result.status === 'rejected');
+  assert.match(rejected.reason.message, /not awaiting triage/);
+  const summary = summarize(await store.read());
+  assert.equal(summary.triagePending, false);
+  assert.deepEqual(summary.triage, saved.value);
+  assert.equal(summary.triage.assignments.length, run.tasks.length);
+  const build = summary.tasks.find(task => task.packet.id === override.taskId);
+  assert.deepEqual(build.packet.profileRef, { id: 'frontend-engineer', revision: 1 });
+  assert.deepEqual(build.packet.prerequisites, run.tasks.find(task => task.packet.id === override.taskId).packet.prerequisites);
+  assert.equal(summary.artifacts.find(value => value.id === build.packetId).provenance.decisionId, summary.triage.artifactId);
+  await assert.rejects(dispatch(store, 'website-build'), /Waiting for accepted handoff/);
+});
+
+test('the CLI starts the initial assignments on static intake or manual confirmation', async t => {
+  const { repo } = await fixture(t);
+  const fakeCodex = join(repo, 'codex');
+  await writeFile(fakeCodex, `#!${process.execPath}
+const fs = require('node:fs');
+const { task } = JSON.parse(fs.readFileSync(0, 'utf8').split('\\n').at(-1));
+if (task.id === 'visual-review') process.exit(1);
+const output = process.argv[process.argv.indexOf('--output-last-message') + 1];
+fs.writeFileSync(output, JSON.stringify({ state: 'completed', summary: 'Fixture result',
+  outputs: task.outputs.map(slot => ({ slot: slot.id, content: 'Fixture output' })),
+  decisions: [], questions: [], blockers: [] }));
+console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 2, output_tokens: 1 } }));
+`, { mode: 0o700 });
+  function cli(...args) {
+    const entry = fileURLToPath(new URL('../bin/crew.mjs', import.meta.url));
+    return spawnSync(process.execPath, [entry, '--repo', repo, ...args], {
+      encoding: 'utf8', env: { ...process.env, PATH: `${repo}:${process.env.PATH}` },
+    });
+  }
+  const catalog = cli('run', 'start', 'catalog', '--project', config);
+  assert.equal(catalog.status, 0, catalog.stderr);
+  const { run: staticRun } = JSON.parse(catalog.stdout);
+  assert.deepEqual(staticRun.tasks.filter(task => task.attempts.length).map(task => task.packet.id), ['product-review', 'lead-review']);
+  assert.ok(staticRun.tasks.slice(0, 2).every(task => task.attempts[0].evidenceStatus === 'recorded'));
+
+  const website = cli('run', 'start', 'website', '--project', websiteConfig);
+  assert.equal(website.status, 0, website.stderr);
+  assert.equal(JSON.parse(website.stdout).run.triage.status, 'pending');
+  assert.ok(JSON.parse(website.stdout).run.tasks.every(task => !task.attempts.length));
+  const confirmation = cli('run', 'triage', 'website', '--owner', 'SDM', '--note', 'Use the proposed team.', '--events');
+  assert.equal(confirmation.status, 5, confirmation.stderr);
+  const [kickoff, decision] = confirmation.stdout.trim().split('\n').map(JSON.parse);
+  assert.equal(kickoff.event, 'run.kickoff');
+  assert.equal(decision.triage.status, 'assigned');
+  const { run: manualRun } = JSON.parse(cli('run', 'show', 'website').stdout);
+  const started = manualRun.tasks.filter(task => task.attempts.length);
+  assert.deepEqual(started.map(task => task.packet.id), ['ux-review', 'visual-review']);
+  assert.deepEqual(kickoff.attempts.map(attempt => attempt.attemptId), started.map(task => task.attempts[0].id));
+  assert.deepEqual(started.map(task => task.attempts[0].outcome), ['completed', 'execution-failed']);
+  assert.equal(cli('run', 'triage', 'website', '--owner', 'SDM', '--note', 'Duplicate').status, 3);
+  assert.equal(cli('task', 'dispatch', 'website', 'website-plan').status, 3);
+  const prepared = cli('run', 'start', 'prepared', '--project', config, '--no-dispatch');
+  assert.equal(prepared.status, 0, prepared.stderr);
+  assert.ok(JSON.parse(prepared.stdout).run.tasks.every(task => !task.attempts.length));
+});
+
+test('concurrent kickoff calls reserve each initial assignment once', async t => {
+  const { control, snapshot } = await fixture(t);
+  const store = runStore(control.gitDir, 'kickoff');
+  await store.create(newRun(snapshot, 'kickoff', config));
+  const execute = async () => ({ outcome: 'execution-failed', receipt: {} });
+  const start = () => dispatchInitial(store, undefined, undefined, execute);
+  const started = await Promise.all([start(), start()]);
+  assert.deepEqual(started.map(attempts => attempts.length).sort(), [0, 2]);
+  assert.deepEqual((await store.read()).tasks.map(task => task.attempts.length), [1, 1, 0, 0, 0, 0, 0, 0, 0]);
+});
+
+test('a project cannot configure manual triage without a pinned brief or with an unknown alternate', async t => {
+  const { control, repo, git } = await fixture(t);
+  const { project } = readProject(control, websiteConfig);
+  async function commitConfig() {
+    await writeFile(join(repo, websiteConfig), JSON.stringify(project));
+    git('add', websiteConfig);
+    git('-c', 'user.name=Crew Test', '-c', 'user.email=crew@example.invalid', 'commit', '-qm', 'Change triage config');
+  }
+  project.triage.briefInput = 'missing';
+  await commitConfig();
+  assert.throws(() => readProject(control, websiteConfig), /configured brief input/);
+  project.triage.briefInput = 'brief';
+  project.tasks.find(task => task.id === 'website-build').alternateProfiles = ['unknown-engineer'];
+  await commitConfig();
+  assert.throws(() => readProject(control, websiteConfig), /Unknown alternate profile/);
 });
 
 test('an incomplete result needs rework and acceptance requires evidence from the new attempt', async t => {
@@ -116,7 +245,6 @@ test('the plan joins only accepted reviews and pins both upstream artifacts', as
 
 test('the website plan joins both design outputs and the roster retains each epic’s profiles', async t => {
   const { control, snapshot } = await fixture(t);
-  const websiteConfig = 'examples/hello-world/website.crew.project.json';
   const catalog = newRun(snapshot, 'catalog', config);
   const website = newRun(readProject(control, websiteConfig), 'website', websiteConfig);
   const store = runStore(control.gitDir, website.id);
@@ -127,6 +255,7 @@ test('the website plan joins both design outputs and the roster retains each epi
   assert.deepEqual(website.tasks[2].packet.handoffInputs, [
     { task: 'ux-review', slot: 'ux-spec' }, { task: 'visual-review', slot: 'visual-spec' },
   ]);
+  await triageRun(store, 'SDM', 'Use the proposed team.');
   await assert.rejects(dispatch(store, 'website-plan'), /Waiting for accepted handoff: UX review/);
 });
 
@@ -159,11 +288,13 @@ test('task usage counts retries and leaves unpriced attempts visible', async t =
 
 test('implementation blockers gate delivery and a fix loop replaces only candidate-dependent handoffs', async t => {
   const { control, repo } = await fixture(t);
-  const websiteConfig = 'examples/hello-world/website.crew.project.json';
   const snapshot = readProject(control, websiteConfig);
   const run = newRun(snapshot, 'fix-test', websiteConfig);
   const store = runStore(control.gitDir, run.id);
   await store.create(run);
+  const buildId = run.orchestration.buildTask;
+  const triage = await triageRun(store, 'Tech Lead', 'Assign prototype implementation to the frontend specialist.',
+    [{ taskId: buildId, profileId: 'frontend-engineer' }]);
   const completed = (slot, content) => ({
     outcome: 'completed', receipt: {},
     response: { state: 'completed', summary: 'Offline result', decisions: [], questions: [], blockers: [], outputs: [{ slot, content }] },
@@ -172,7 +303,6 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
     const attempt = await dispatch(store, task, undefined, undefined, async () => completed(slot, 'Approved planning artifact'));
     await decide(store, task, attempt.id, 'accepted', 'Planning checked');
   }
-  const buildId = run.orchestration.buildTask;
   const [ux, visual, lead, security] = run.orchestration.reviewTasks;
   const securityProfile = snapshot.project.profiles.find(profile => profile.id === 'security-engineer');
   const [securitySkill] = securityProfile.skills;
@@ -189,7 +319,7 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
         return key;
       };
       task.attempts.push({
-        id, number: task.attempts.length + 1, packetRevision: 1, outcome: 'completed', startedAt: new Date().toISOString(),
+        id, number: task.attempts.length + 1, packetRevision: task.packet.revision, outcome: 'completed', startedAt: new Date().toISOString(),
         receiptId: add('receipt', '{}'), candidate, result: { state: 'completed', artifacts: { website: add('website', content) } },
         runnerArtifacts: { candidate: add('candidate', JSON.stringify(candidate)), 'check-receipt': add('check-receipt', '{}'),
           'candidate-diff': add('candidate-diff', candidateDiff(control, candidate)) },
@@ -227,6 +357,8 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
   assert.equal(currentAttempt(summary.tasks[2]).decision.disposition, 'accepted');
 
   const repeated = await dispatch(store, buildId, undefined, undefined, async job => {
+    assert.equal(job.profile.id, 'frontend-engineer');
+    assert.equal(job.attempt.triageArtifactId, triage.artifactId);
     assert.equal(job.task.fixLoop.previousCandidate, first.candidate.commit);
     assert.ok(loop.artifacts.every(record => job.inputs.some(input => input.id === record.id && input.digest === record.digest)));
     return completed('website', source);

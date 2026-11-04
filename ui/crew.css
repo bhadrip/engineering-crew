@@ -162,6 +162,13 @@ button.secondary:hover, .search-submit:hover { background: var(--surface); }
 .status p:last-child { margin-bottom: 0; }
 .decision { display: grid; gap: .35rem; width: min(24rem,75vw); }
 .decision label { font-size: .86rem; font-weight: 650; }
+.triage-panel { max-width: 54rem; }
+.triage-roster { margin: .9rem 0; }
+.triage-roster li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 15rem); gap: .3rem 1rem; align-items: start; }
+.triage-roster li > span { color: var(--muted); overflow-wrap: anywhere; }
+.triage-form .decision { width: min(30rem, 100%); }
+.triage-form .buttons { margin-top: .35rem; }
+.triage-links { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
 textarea { width: 100%; resize: vertical; padding: .4rem; border: 1px solid #cbd2db; border-radius: .3rem; }
 .buttons { display: flex; flex-wrap: wrap; gap: .4rem; }
 .columns { display: grid; grid-template-columns: minmax(12rem,16rem) minmax(0,1fr); gap: 1rem; align-items: start; }
@@ -182,6 +189,8 @@ textarea { width: 100%; resize: vertical; padding: .4rem; border: 1px solid #cbd
 pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); border: 1px solid var(--line); padding: .85rem; border-radius: .3rem; }
 .provenance { overflow-wrap: anywhere; }
 @media (max-width: 720px) {
+  .triage-roster li { grid-template-columns: minmax(0, 1fr); }
+  .triage-roster select { width: min(100%, 18rem); }
   main, .mast-inner { padding-inline: 1rem; }
   main { padding-top: 1.25rem; }
   .mast-inner { gap: 1.15rem; }

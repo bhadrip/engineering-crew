@@ -53,7 +53,7 @@ function stateBadge(label, tone) {
   return `<span class="state-badge ${tone}"><i aria-hidden="true"></i>${escape(label)}</span>`;
 }
 
-const stateLabels = { all: 'All statuses', review: 'Ready for review', attention: 'Needs attention',
+const stateLabels = { all: 'All statuses', triage: 'Awaiting triage', review: 'Ready for review', attention: 'Needs attention',
   running: 'In progress', accepted: 'Handoffs accepted', queued: 'Ready to start' };
 const searchTypes = { all: 'All results', handoffs: 'Handoffs', artifacts: 'Artifacts', checks: 'Checks' };
 const selectOptions = (options, selected) => Object.entries(options).map(([value, label]) =>
@@ -61,6 +61,7 @@ const selectOptions = (options, selected) => Object.entries(options).map(([value
 
 function runState(run) {
   const { accepted, running, review, attention } = run.handoffs;
+  if (run.triagePending) return ['triage', 'Awaiting triage', 'warning'];
   if (run.readyForProjectReview) return ['review', 'Ready for project review', 'success'];
   if (attention) return ['attention', 'Needs attention', 'warning'];
   if (running) return ['running', 'In progress', 'active'];
@@ -84,6 +85,7 @@ function waitingOn(run, task) {
 }
 
 function taskStatus(run, task) {
+  if (run.triagePending) return ['Awaiting triage', 'Confirm the team before dispatching work.', 'neutral'];
   const latest = currentAttempt(task);
   const waiting = waitingOn(run, task);
   return !latest && waiting.length
@@ -151,6 +153,7 @@ ${decisions.length ? `<section class="project-activity"><div class="section-titl
 }
 
 function activityLabel(title, action) {
+  if (action === 'assigned') return `${title} assigned`;
   if (action === 'accepted') return `${title} accepted`;
   if (action === 'rework') return `${title} returned for rework`;
   if (action === 'running' || action === 'started') return `${title} started`;
@@ -159,12 +162,12 @@ function activityLabel(title, action) {
 }
 
 export function epicPage(project, epic, run, { step, view, query = '', type } = {}) {
-  const tabs = { overview: 'Overview', workflow: 'Workflow',
+  const tabs = { ...(run.triage ? { triage: 'Triage' } : {}), overview: 'Overview', workflow: 'Workflow',
     ...(run.fix ? { reviews: 'Reviews' } : {}),
     ...(run.tasks.some(task => task.packet.execution) ? { checks: 'Checks' } : {}), usage: 'Usage', activity: 'Activity' };
-  const selected = Object.hasOwn(tabs, view) || view === 'search' ? view : step ? 'workflow' : 'overview';
+  const selected = Object.hasOwn(tabs, view) || view === 'search' ? view : step ? 'workflow' : run.triagePending ? 'triage' : 'overview';
   const [, label, tone] = runState(run);
-  const content = selected === 'workflow' ? pipelinePanel(run, step) : selected === 'checks' ? checksPanel(run)
+  const content = selected === 'triage' ? triagePanel(run) : selected === 'workflow' ? pipelinePanel(run, step) : selected === 'checks' ? checksPanel(run)
     : selected === 'reviews' ? reviewsPanel(run) : selected === 'usage' ? usagePanel(run) : selected === 'activity' ? activityPanel(run)
       : selected === 'search' ? searchPanel(run, query, type) : overviewPanel(run, epic);
   return layout(`${epicName(epic)} · ${project.name}`, `${projectHeader(project)}<main data-epic-view>
@@ -183,6 +186,9 @@ function activityEvents(run) {
     title: `Fix loop ${loop.number} requested`, at: loop.recordedAt, detail: loop.note, tone: 'warning', key: true,
     href: epicViewHref(run, 'reviews'),
   }));
+  if (run.triage?.recordedAt) events.push({ title: 'Team assigned', at: run.triage.recordedAt,
+    detail: run.triage.mode === 'static' ? 'Used the team configured in Git.' : `${run.triage.owner} · ${run.triage.note}`,
+    tone: 'success', key: true, href: epicViewHref(run, 'triage') });
   for (const task of run.tasks) {
     const { packet } = task;
     const profile = run.profiles.find(value => value.id === packet.profileId);
@@ -225,11 +231,38 @@ function activityPanel(run) {
   return `<section class="record-section"><div class="section-title"><h2>Activity</h2><p>Newest first</p></div>${eventList(activityEvents(run))}</section>`;
 }
 
+function triagePanel(run) {
+  const { triage, triagePending } = run;
+  const profiles = new Map(run.profiles.map(profile => [profile.id, profile]));
+  const roster = `<ul class="index-list triage-roster">${run.tasks.map(({ packet, alternateProfiles }) => {
+    const profile = profiles.get(packet.profileId);
+    return `<li><div><strong${triagePending && alternateProfiles?.length ? ` id="label-${escape(packet.id)}"` : ''}>${escape(packet.title)}</strong>
+<p>${escape(packet.objective)}</p></div>
+${triagePending && alternateProfiles?.length ? `<select aria-labelledby="label-${escape(packet.id)}" name="assignment-${escape(packet.id)}">
+${[profile.id, ...alternateProfiles].map(id => `<option value="${escape(id)}">${escape(profiles.get(id).name)}</option>`).join('')}</select>`
+      : `<span>${escape(profile.name)}</span>`}</li>`;
+  }).join('')}</ul>`;
+  return `<section class="record-section triage-panel"><div class="section-title"><h2>${triagePending ? 'Review brief and assign team' : 'Team assignments'}</h2>
+${triage.brief ? `<a href="${artifactHref(run.id, triage.brief.artifactId)}?view=triage">Open pinned brief ${arrow}</a>` : ''}</div>
+${triagePending ? `<p class="muted">Review the brief and confirm the team. The first assignments start immediately.</p>
+<form class="triage-form" method="post" action="${runHref(run.id)}/triage">
+${roster}
+<div class="decision"><label for="triage-owner">Triage owner</label>
+<select name="owner" id="triage-owner" required><option value="">Select the triage owner</option>
+${triage.owners.map(owner => `<option value="${escape(owner)}">${escape(owner)}</option>`).join('')}</select>
+<label for="triage-note">Assignment reason</label><textarea name="note" id="triage-note" rows="2" required maxlength="2000"></textarea>
+<div class="buttons"><button type="submit">Confirm and start</button></div></div></form>`
+    : `<p>${triage.mode === 'static' ? 'Assigned from the Git configuration' : `Confirmed by <strong>${escape(triage.owner)}</strong>`}
+· ${timestamp(triage.recordedAt)}</p>${triage.note ? `<p>${escape(triage.note)}</p>` : ''}
+${roster}<p class="triage-links"><a href="${epicViewHref(run, 'workflow')}">Open workflow ${arrow}</a>
+<a href="${artifactHref(run.id, triage.artifactId)}?view=triage">View assignment record ${arrow}</a></p>`}</section>`;
+}
+
 function overviewPanel(run, epic) {
   const build = currentAttempt(run.tasks.find(task => task.packet.execution?.kind === 'build'));
   const qaTask = run.tasks.find(task => task.packet.execution?.kind === 'verify');
   const qa = currentAttempt(qaTask)?.verification;
-  const brief = run.artifacts.find(artifact => artifact.id === 'input-brief');
+  const brief = run.artifacts.find(artifact => artifact.id === (run.triage?.brief?.artifactId ?? 'input-brief'));
   const candidate = build?.candidate;
   const diff = build?.runnerArtifacts?.['candidate-diff'];
   const history = epic.runs.length > 1 ? `<h3>Run history</h3><ul class="index-list">${epic.runs.map(entry => `<li>
@@ -377,6 +410,7 @@ function pipelinePanel(run, step) {
     stages.flat().find(({ parents }) => parents.length > 1)?.task ?? run.tasks[0];
   const taskById = new Map(run.tasks.map(task => [task.packet.id, task]));
   return `<section class="record-section" id="pipeline" aria-labelledby="pipeline-heading"><div class="section-title"><h2 id="pipeline-heading">Handoff pipeline</h2><p>${run.tasks.length} handoffs</p></div>
+${run.triagePending ? `<p><a href="${epicViewHref(run, 'triage')}">Review brief and assign team ${arrow}</a></p>` : ''}
 <div class="pipeline-map"><div class="pipeline-track${stages.some(stage => stage.length > 2) ? ' wide' : ''}">
 ${stages.map((stage, index) => {
     const previous = stages[index - 1] ?? [];
@@ -474,6 +508,7 @@ function links(run, taskId, ids, view) {
 }
 
 function controls(run, task, waiting) {
+  if (run.triagePending) return `<a href="${epicViewHref(run, 'triage')}">Review brief and assign team ${arrow}</a>`;
   if (waiting.length) return '';
   const { packet } = task;
   const attempt = currentAttempt(task);
@@ -512,7 +547,7 @@ ${run.orchestration?.reviewTasks.includes(packet.id) ? `<p><a href="${epicViewHr
 <h2 id="run-status">${verdict}</h2><p>${escape(description)}</p></div><div class="action">${controls(run, task, waitingOn(run, task))}</div></section>
 <div class="columns"><aside><h2>Workflow</h2><ul class="links workflow">${run.tasks.map(item => `<li>
 <a href="${taskHref(run.id, item.packet.id)}"${item === task ? ' aria-current="page"' : ''}>${escape(item.packet.title)}<span>${escape(taskStatus(run, item)[0])}</span></a></li>`).join('')}</ul>
-<dl class="meta"><div><dt>Assigned to</dt><dd><a href="${artifactHref(run.id, profile.instructionId, packet.id)}">${escape(profile.name)}</a></dd></div>
+<dl class="meta"><div><dt>${run.triagePending ? 'Proposed assignee' : 'Assigned to'}</dt><dd><a href="${artifactHref(run.id, profile.instructionId, packet.id)}">${escape(profile.name)}</a></dd></div>
 <div><dt>Decision owner</dt><dd>${escape(packet.acceptedBy)}</dd></div><div><dt>Cost owner</dt><dd>${escape(task.usage.costOwner ?? 'Unrecorded')}</dd></div>
 <div><dt>Git commit</dt><dd><code title="${escape(run.sourceCommit)}">${escape(run.sourceCommit.slice(0, 12))}</code></dd></div>
 <div><dt>Run</dt><dd><code>${escape(run.id)}</code></dd></div></dl></aside>
@@ -532,12 +567,14 @@ ${attempt.decision ? `<p class="muted">${escape(attempt.decision.owner)} recorde
 
 export function artifactPage(artifact, run, fromTask, view) {
   const provenance = artifact.provenance.source === 'git' ? `Git · ${artifact.provenance.path} · ${artifact.provenance.sourceCommit}`
-    : `${artifact.provenance.source} · ${artifact.provenance.attemptId}`;
+    : artifact.provenance.source === 'triage' ? `Triage · Git baseline ${artifact.provenance.sourceCommit}`
+      : `${artifact.provenance.source} · ${artifact.provenance.attemptId}`;
   let back = [projectHref(run.project), 'Back to project'];
   if (fromTask && view === 'pipeline') back = [pipelineHref(run, fromTask), 'Back to the pipeline step'];
   else if (fromTask) back = [taskHref(run.id, fromTask), 'Back to the handoff'];
   else if (view === 'agents') back = [`${projectHref(run.project)}/agents`, 'Back to agents'];
   else if (view === 'checks') back = [epicViewHref(run, 'checks'), 'Back to checks'];
+  else if (view === 'triage') back = [epicViewHref(run, 'triage'), 'Back to triage'];
   else if (view === 'epic') back = [`${epicHref(run.project, run.epic)}?run=${encodeURIComponent(run.id)}`, 'Back to the epic'];
   return layout(artifact.title, `${projectHeader(run.project)}<main><nav class="breadcrumbs" aria-label="Location"><a href="${back[0]}">← ${back[1]}</a></nav>
 <p class="eyebrow">Linked artifact</p><h1>${escape(artifact.title)}</h1><p class="muted provenance">${escape(provenance)}</p>
