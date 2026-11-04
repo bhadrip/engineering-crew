@@ -82,11 +82,13 @@
     },
     {
       "id": "security-engineer",
-      "revision": 1,
+      "revision": 2,
       "name": "Security Engineer",
       "remit": "Review the candidate for security regressions and deferred hardening.",
       "instructions": "examples/hello-world/crew/security-engineer.md",
-      "skills": [],
+      "skills": [
+        "examples/hello-world/crew/skills/review-security-diff/SKILL.md"
+      ],
       "tools": []
     }
   ],

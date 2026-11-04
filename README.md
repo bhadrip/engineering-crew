@@ -97,3 +97,10 @@ browser evidence. New configuration applies to new runs.
 The preview runs locally. If the checkout has runs for multiple projects,
 choose one with `crew ui --project-id <project>` or `crew ui <run>`.
 [V1 design](docs/design/engineering-crew.md)
+
+### Agent skills and evals
+
+The Security Engineer is the first profile with a researched skill and a fixed
+behavioral benchmark. [Agent development pattern](docs/agent-development.md)
+explains how to develop another role. Changes to active skills require fresh
+eval evidence; `npm test` regrades the recorded results offline.

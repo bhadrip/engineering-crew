@@ -1,0 +1,18 @@
+{
+  "id": "security-engineer-review",
+  "title": "Security review",
+  "objective": "Review the pinned candidate for concrete application security risks and scope changes. State which risks need runtime evidence.",
+  "criteria": ["SEC-1"],
+  "outputs": [
+    {
+      "id": "findings",
+      "title": "Implementation findings",
+      "kind": "review-findings",
+      "required": true,
+      "acceptance": "Record source-backed findings with severity blocker or backlog. State where runtime evidence is needed."
+    }
+  ],
+  "budget": { "targetTotalTokens": 30000, "timeoutSeconds": 120, "maxAttempts": 1, "costOwner": "SDM" },
+  "permissions": { "mode": "read-only", "toolNetwork": "denied", "tools": [], "externalActions": [], "writePaths": [], "readPaths": [] },
+  "acceptedBy": "SDM"
+}
