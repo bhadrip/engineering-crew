@@ -223,24 +223,23 @@ attachment links.
 
 ## Records and the viewer
 
-Use one project config and one versioned JSON manifest per run, with Markdown,
-patches, and sanitized logs as linked artifacts. The manifest is the index of
-record. The UI derives its routes and layout from the CLI's run response. One
-process can serve one selected run on loopback. V1 uses local files and starts
-assignments on request.
+Crew owns the `engineering_crew` schema in a customer-provided Postgres
+database. It registers immutable project and epic configuration versions and
+stores the run manifest, linked artifact contents, and candidate snapshots
+in Postgres. Row-level transactions serialize changes to the same run. The
+UI derives its routes and layout from the CLI's run response.
 
-A consumer keeps `crew.project.json` and its role profiles alongside its own
-code. Git controls the config, brief, and inputs. Starting a run pins those
-files to a commit. The first implementation keeps run records and attachments
-in `engineering-crew/runs` inside the checkout's Git directory. Pet Store keeps
-its config beside the Hello World CLI, which can run its own tests independently.
+Git hosts static agent prompts and skills alongside product source. Project
+registration captures the referenced files at a Git commit. Runs pin the
+registered configuration version and its captured assets. The example JSON
+files are sample registration inputs.
 
 | Record | Minimum contract |
 | --- | --- |
 | Project config | Schema version, stable project ID and display names, agent profile references, repository aliases and allowed roots, runtime bindings, and capture policy. Run records retain the config revision or resolved roster so old runs remain readable. |
 | Epic and run | Epic ID, brief revision, criteria with IDs, run ID, project and source revisions, plan revision, run disposition, and optional review/PR URL. IDs are stable within the project. |
 | Step and attempt | Step ID, owner (role plus actor or session label), prerequisite step IDs, input artifact IDs, expected output slots, and criterion IDs. Each attempt records packet revision, work state, decisions with owners and rationale, actual outputs, evidence references, and any observed start and end times. |
-| Artifact | ID, label, kind, provenance, and a resolvable location. Bundle files use a registered relative path and digest. Source links pin a repository revision and path. A produced artifact points to the attempt that made it. |
+| Artifact | ID, label, kind, provenance, and a resolvable location. Postgres artifacts use a run-scoped ID and content digest. Git inputs pin a repository revision and path. A produced artifact points to the attempt that made it. |
 | Evidence | Run, step and attempt IDs, plus criterion IDs when applicable. Record the observed source or candidate revision, evidence kind, status, and receipt or result reference. Test records include expected and observed behavior and the exit code when applicable. |
 
 The epic page opens with the brief and criteria, followed by the dependency map.
@@ -305,21 +304,20 @@ configuration entry and a task packet.
 
 ## Local operation and evidence
 
-1. Point the crew at a trusted project checkout and its configuration. Record
-   an epic, base commit, and run ID. Use a dedicated worktree or disposable
-   checkout when building a candidate.
+1. Register a project configuration and the source baseline from a trusted
+   checkout in Postgres. Start a run against a configuration version.
 2. The SDM dispatches bounded packets from the UI or CLI into separate Codex
-   sessions and records accepted returns in the local bundle. Product and Lead
+   sessions and records accepted returns in Postgres. Product and Lead
    may run concurrently.
    Record who executed each assignment and show any gap in independent QA.
-3. Run and record checks against the candidate. Open the bundle in the loopback
-   viewer and assemble the review. The pilot uses Git, Node, Codex, and local
-   files, with Docker for check receipts and a local Langfuse demonstration.
+3. Run and record checks against the candidate. Open the run in the loopback
+   viewer and assemble the review. Docker supplies check receipts and
+   Langfuse can receive selected evidence.
 
 The project owns the epic, criteria and signoff policy, source and data,
 enabled roles and tools, runtime permissions, execution environment, review
-destination, and what it retains or shares. Git ignores private run bundles
-and capture receipts by default. The project can share a reviewed subset of
+destination, and what it retains or shares. The customer controls access to run records
+and captured evidence through its Postgres deployment. The project can share a reviewed subset of
 artifacts and attach a PR when it has one.
 
 **Docker records command execution.** Use a pinned runtime image, an exact

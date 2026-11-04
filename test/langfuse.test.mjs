@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { langfuseConfig, langfuseSpan, publishLangfuse, verifiedTraceLink } from '../lib/langfuse.mjs';
-import { artifact, runStore } from '../lib/run-store.mjs';
+import { artifact } from '../lib/run-store.mjs';
+import { memoryRunStore } from '../test-support/stores.mjs';
 import { publishAttemptTrace, summarize } from '../lib/workflow.mjs';
 
 const attemptId = '8b0f38cd-24ca-4d34-bc2b-0dbdcf5f6154';
@@ -20,7 +21,8 @@ async function fixture(t) {
   await mkdir(gitDir, { recursive: true });
   const location = join(directory, 'credentials.json');
   await writeFile(location, JSON.stringify({ public_key: 'pk-lf-test', secret_key: 'sk-lf-test' }), { mode: 0o600 });
-  const run = { id: 'run-1', project: { id: 'pet-store' }, epic: { id: 'epic-1' }, sourceCommit: 'a'.repeat(40), tasks: [], artifacts: [] };
+  const run = { id: 'run-1', project: { id: 'pet-store' }, epic: { id: 'epic-1' }, sourceCommit: 'a'.repeat(40),
+    profiles: [{ id: 'product', name: 'Product Manager' }], tasks: [], artifacts: [] };
   const receipt = { runId: run.id, taskId: 'review', attemptId, threadId, sourceCommit: run.sourceCommit, outcome: 'completed',
     usage: { input: 42, output: 11, total: 53 }, unexpectedText: 'private transcript fixture' };
   const record = artifact('receipt-1', 'Codex execution receipt', 'json', JSON.stringify(receipt), { source: 'runtime', attemptId });
@@ -29,7 +31,7 @@ async function fixture(t) {
   const task = { packet: { id: 'review', profileId: 'product', budget: { targetTotalTokens: 100 } }, attempts: [attempt] };
   run.tasks.push(task);
   run.artifacts.push(record);
-  const store = runStore(gitDir, run.id);
+  const store = memoryRunStore();
   await store.create(run);
   return { control: { root, gitDir }, store, run, task, attempt, record, receipt,
     env: { CREW_LANGFUSE_URL: 'http://127.0.0.1:3312', CREW_LANGFUSE_PROJECT_ID: 'test-project', CREW_LANGFUSE_CREDENTIALS_FILE: location } };

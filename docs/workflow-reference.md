@@ -2,25 +2,56 @@
 
 ## Start, inspect, and replay runs
 
-Keep the project JSON, brief, agent profiles, and assignment inputs in Git.
-A run reads the committed files from `HEAD` by default. Validate a configuration
-before starting a run with it.
+Set `CREW_DATABASE_URL` to the connection URL for the customer database.
+Crew initializes its own `engineering_crew` schema on first use.
+Use one database per Crew installation. Run IDs are unique in that database.
+
+Submit project JSON with `project register --file`. The registration command
+captures the configured source, prompts, skills, and default input files
+from a Git commit. It defaults to `HEAD`. Use `--repo <checkout>` and
+`--ref <commit>` to select their source. Supply private briefs and other
+run inputs with `--input <id>=<file>` to capture them directly from disk.
+You can keep the JSON outside the checkout or discard it after registration.
+Use `project validate --file` to validate an import before registering it.
 
 ```sh
-node bin/crew.mjs project validate --project examples/hello-world/crew.project.json
-node bin/crew.mjs project validate --project examples/hello-world/website.crew.project.json
-node bin/crew.mjs --help
+node bin/crew.mjs project register --file /path/to/epic.json --input brief=/path/to/brief.md
+node bin/crew.mjs project versions --project pet-store --epic epic-1
+node bin/crew.mjs project show --project pet-store --epic epic-1 --version 1
+node bin/crew.mjs run start replay-1 --project pet-store --epic epic-1 --version 1
 ```
 
-For a replay, pass `--ref <commit>` to `run start` and use a fresh run ID.
-Use `--repo <checkout>` to select a separate checkout. When a checkout contains
-multiple projects, select the browser view with `crew ui --project-id <project>`
-or `crew ui <run>`.
+Each changed registration creates the next immutable version for that
+project and epic. An identical registration returns the latest version.
+`run start` uses the latest by default. Replay with a fresh run ID and the
+original `--version`. Existing runs retain their configuration and inputs.
+Keep prompt files in Git. A profile can list its own skills under
+`skills/<agent-id>/<skill>/SKILL.md` and explicitly opt into shared skills
+under `skills/common/<skill>/SKILL.md` in its repository.
 
-The browser and CLI read the same run. Use `workspace show` to list projects
-and epics, `run show <run>` for the run record, and
+The browser and CLI read the same database. Use `workspace show` to list
+projects and epics with runs, `run show <run>` for the run record, and
 `artifact read <run> <artifact>` for a specific attachment.
-`task dispatch --events` emits machine-readable attempt events.
+Select a browser project with `crew ui --project-id <project>` or
+`crew ui <run>`. `task dispatch --events` emits machine-readable events.
+
+## Import existing runs
+
+Stop active local Crew processes and wait for assignments to finish before
+importing. Point Crew at the original checkout so it can capture the
+baseline and legacy candidate files, then run:
+
+```sh
+node bin/crew.mjs db import-local --repo /path/to/checkout
+```
+
+The import preserves run IDs, evidence, Git provenance, and the configuration
+snapshot attached to each historical run. It copies existing provisioner
+bindings where no database binding exists. Legacy files and refs remain in
+place for verification. Repeating the import skips identical records, even
+after they advance in Postgres. A conflicting run ID or a missing required
+Git object rolls back the import. Register a project version separately
+when you want to start new runs.
 
 ## Triage a brief and assign a team
 
@@ -68,8 +99,8 @@ node bin/crew.mjs run show <run>
 node bin/crew.mjs resource resolve <run> <request-id> --note "Catalog table is ready in dev."
 ```
 
-Administrators can add `resourcePolicy` to the committed project JSON. Rules
-are pinned when the run starts. Exact action and target rules take precedence
+Administrators can register a project configuration with `resourcePolicy`.
+Rules are pinned when the run starts. Exact action and target rules take precedence
 over action-wide rules. Unmatched requests use manual setup.
 
 ```json
@@ -91,20 +122,13 @@ over action-wide rules. Unmatched requests use manual setup.
   An unavailable or failed provisioner leaves the request in the queue
   for manual setup.
 
-To register an automatic provisioner, place an array of entries in
-`engineering-crew/provisioners.json` under the checkout's Git directory.
-Restrict write access to the local administrator. Each entry binds one
-project, action, and target to a fixed executable and arguments.
+Register an automatic provisioner in Postgres with an exact project, action,
+and target. Restrict writes to the provisioner table to trusted operators.
+The executable runs on the worker host.
 
-```json
-[
-  {
-    "project": "pet-store",
-    "action": "create-table",
-    "target": "dev.catalog",
-    "command": ["/opt/crew/bin/ensure-dev-catalog"]
-  }
-]
+```sh
+node bin/crew.mjs provisioner set create-table dev.catalog --project pet-store -- /opt/crew/bin/ensure-dev-catalog
+node bin/crew.mjs provisioner remove create-table dev.catalog --project pet-store
 ```
 
 Use an idempotent executable that exits successfully once the resource is
@@ -142,11 +166,12 @@ the reviews it needs. Configuration changes apply to new runs.
 
 ## Evidence and usage
 
-Run records and attachments live under `engineering-crew/runs` inside the
-checkout’s Git directory. A downstream attempt records the accepted producer,
-output slot, attempt, artifact ID, and digest for each input. The build runner
-creates an isolated Git candidate ref. Where configured, author tests and
-independent QA produce separate Docker receipts tied to the tested commit.
+Run records and attachments live in Postgres. A downstream attempt records
+the accepted producer, output slot, attempt, artifact ID, and digest for
+each input. The build runner records candidate files, the revision, and its
+diff in the run. Where configured, author tests and independent QA produce
+separate Docker receipts tied to that revision. QA materializes the accepted
+files from Postgres.
 The website smoke test checks source. Rendered appearance and interaction
 require browser evidence.
 
@@ -158,6 +183,16 @@ For estimated USD cost, pin `runtime.model` and set `inputUsdPerMillion` and
 `cachedInputUsdPerMillion` defaults to the input rate.
 Set `budget.costTargetUsd` per task to track its combined attempt cost.
 Missing usage or rates leave the corresponding estimate unknown.
+
+**Usage** shows workflow totals and a breakdown by agent, task, and attempt.
+
+**Usage** includes retries and work on superseded candidates. Total attempt
+time adds up finished attempts, including runner checks, and can exceed the
+attempt window when work overlaps. The window runs from the first recorded
+start to the last recorded finish among timed attempts. Open an attempt to see
+its token breakdown and Codex process time when recorded. Quality signals
+include current handoff acceptance and recorded Docker checks, plus historical
+rework decisions. These same metrics are available in `run show`.
 
 To export selected evidence for deeper inspection, see the
 [Langfuse setup guide](langfuse.md).

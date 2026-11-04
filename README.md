@@ -1,26 +1,26 @@
 # Engineering Crew
 
 Engineering Crew coordinates a configurable team of Codex agents to deliver
-working software. Give the crew a brief and a Git-defined workflow. The crew
+working software. Give the crew a brief and a versioned workflow. The crew
 divides the work among specialists, verifies the result in a local sandbox, and
 records the evidence behind each handoff.
 
 ![The delivery model takes a brief through specialist planning and implementation across repositories. QA runs the candidate in a local sandbox while design and security review the changes. Blocking findings go back to the implementer before delivery.](docs/engineering-crew-overview.png)
 
 The diagram shows the intended delivery model across repositories. The current
-Pet Store pilot runs within a single Git checkout.
+Pet Store pilot registers source from a single Git repository.
 
 ## How the crew works
 
 1. **Triage the brief.** A configured owner reviews the pinned brief and
    confirms the team. Projects with a standing team use the assignments in
-   Git. The first assignments start once the team is set.
+   the registered configuration. The first assignments start once the team is set.
 2. **Plan the work.** The brief defines the outcome and acceptance criteria.
    Specialist agents contribute scoped reviews and a lead turns them into an
    implementation plan. Each assignment receives pinned inputs and has a
    named owner for the handoff decision.
 3. **Build a candidate.** The engineer agent returns the source for its assigned
-   files. Crew turns those outputs into an isolated Git candidate. Codex runs
+   files. Crew assembles those outputs into a candidate snapshot. Codex runs
    the agent assignments, and Crew runs the candidate and its configured
    checks in local Docker.
 4. **Verify independently.** QA supplies its own cases and checks what the
@@ -49,11 +49,16 @@ and trace it to the attempt that produced it.
 
 ## Configure, run, and trace
 
-![Git defines roles, handoffs, and checks. The browser UI dispatches tasks and records handoff decisions. Optional CLI exports link selected attempts to verified traces in Langfuse.](docs/engineering-crew-controls.png)
+**Postgres stores the workflow and its runs.** Provide a customer-managed
+Postgres database. Crew creates its own `engineering_crew` schema. Register a
+project and epic configuration to version their assignments, inputs, policies,
+and checks. Each run pins that version and stores its attempts, decisions,
+candidate files, and evidence in the same database.
 
-**Git defines the workflow.** Commit the brief, roles, task dependencies,
-expected outputs, and checks alongside the project. Each run pins its inputs
-to a Git commit.
+**Git supplies source and agent assets.** Commit static prompts and skills
+with the product source. Crew captures their contents from a Git revision
+when you register a configuration, so later dispatch and replay can run
+from the database snapshot.
 
 **The browser UI operates the run.** Use **Workflow** to dispatch assignments
 and inspect their inputs and outputs. Accept a handoff to make its output
@@ -77,17 +82,22 @@ delivery workflow.
 | Catalog command | Product and engineering planning, a Node.js implementation, and independent Docker QA against the candidate CLI. |
 | Catalog website | A website prototype, design and security reviews, a Docker smoke test of the source, and one fix loop. |
 
-You’ll need Git, Node.js 22 or later, a signed-in Codex CLI, and a running Docker
-daemon. Pull the Node image pinned by both examples, start one or both epics,
-and launch the browser UI.
+You’ll need Git, Node.js 22 or later, a signed-in Codex CLI, Docker, and a
+Postgres connection. Supply `CREW_DATABASE_URL` in the environment. The
+connection role needs permission to create the Crew schema on first use.
+The example JSON files are sample inputs to the registration command.
 
 ```sh
 git clone https://github.com/bhadrip/engineering-crew.git
 cd engineering-crew
+npm ci
+node bin/crew.mjs db init
 docker pull node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
 
-node bin/crew.mjs run start epic-1 --project examples/hello-world/crew.project.json
-node bin/crew.mjs run start epic-2 --project examples/hello-world/website.crew.project.json
+node bin/crew.mjs project register --file examples/hello-world/crew.project.json
+node bin/crew.mjs project register --file examples/hello-world/website.crew.project.json
+node bin/crew.mjs run start epic-1 --project pet-store --epic epic-1
+node bin/crew.mjs run start epic-2 --project pet-store --epic epic-2
 node bin/crew.mjs ui
 ```
 
@@ -104,4 +114,7 @@ assignments become available to dispatch.
 - [Design and contracts](docs/design/engineering-crew.md) describes the
   execution boundaries and handoffs.
 - [Agent development and evals](docs/agent-development.md) shows how to build
-  and benchmark a specialist profile. Run `npm test` for the offline checks.
+  and benchmark a specialist profile.
+- Run `npm test` for offline checks. Set `CREW_TEST_DATABASE_URL` to a
+  disposable Postgres server with database creation permission to include
+  the database integration tests.
