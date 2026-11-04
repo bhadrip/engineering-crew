@@ -99,8 +99,8 @@ assignments become available to dispatch.
 
 ## Reference
 
-- [Workflow reference](docs/workflow-reference.md) covers triage, replay,
-  fix loops, run records, and usage.
+- [Workflow reference](docs/workflow-reference.md) covers triage, resource
+  approvals, replay, fix loops, run records, and usage.
 - [Design and contracts](docs/design/engineering-crew.md) describes the
   execution boundaries and handoffs.
 - [Agent development and evals](docs/agent-development.md) shows how to build

@@ -97,8 +97,8 @@ export async function serve({ repo, projectId, port }) {
     const origin = `http://${host}`;
     try {
       const url = new URL(request.url, origin);
-      const projectRoute = /^\/projects\/([a-z0-9-]+)(?:(\/agents)|\/epics\/([a-z0-9-]+))?$/.exec(url.pathname);
-      const runRoute = /^\/runs\/([a-z0-9-]+)(?:\/(tasks|artifacts)\/([a-z0-9-]+)|\/(fix|triage))?$/.exec(url.pathname);
+      const projectRoute = /^\/projects\/([a-z0-9-]+)(?:\/(agents|attention)|\/epics\/([a-z0-9-]+))?$/.exec(url.pathname);
+      const runRoute = /^\/runs\/([a-z0-9-]+)(?:\/(tasks|artifacts)\/([a-z0-9-]+)|\/(fix|triage|resolve-resource))?$/.exec(url.pathname);
       const [, selectedRun, section, item, runAction] = runRoute ?? [];
       if (request.method === 'GET') {
         if (url.pathname === '/crew.css') return send(response, 200, stylesheet, 'text/css');
@@ -106,10 +106,10 @@ export async function serve({ repo, projectId, port }) {
         const query = url.searchParams.get('q')?.trim().slice(0, 160) ?? '';
         if (url.pathname === '/' || projectRoute) {
           const { projects } = await call(repo, ['workspace', 'show']);
-          const [, routeProject, agents, epicId] = projectRoute ?? [];
+          const [, routeProject, projectView, epicId] = projectRoute ?? [];
           const project = projects.find(project => project.id === selectedProject.id && (!routeProject || routeProject === project.id));
           if (project && !epicId) {
-            const configurations = agents ? await Promise.all(project.epics.map(async epic => {
+            const configurations = projectView === 'agents' ? await Promise.all(project.epics.map(async epic => {
               try {
                 const config = await call(repo, ['project', 'show', '--project', epic.configurationPath]);
                 if (config.project.id !== project.id || config.project.epic.id !== epic.id) throw new CrewError('Configuration belongs to another epic');
@@ -119,7 +119,7 @@ export async function serve({ repo, projectId, port }) {
                 return { epic, error: error.message };
               }
             })) : [];
-            return send(response, 200, projectPage(project, Boolean(agents), { query, status: url.searchParams.get('status'), configurations }));
+            return send(response, 200, projectPage(project, projectView, { query, status: url.searchParams.get('status'), configurations }));
           }
           const epic = project?.epics.find(epic => epic.id === epicId);
           if (epic) {
@@ -167,6 +167,13 @@ export async function serve({ repo, projectId, port }) {
           if (!/^[a-f0-9-]{36}$/.test(attempt ?? '')) throw new CrewError('Invalid build attempt');
           await call(repo, ['run', 'fix', selectedRun, attempt, `--note=${form.get('note') ?? ''}`]);
           const location = `/projects/${run.project.id}/epics/${run.epic.id}?run=${run.id}&view=reviews`;
+          return send(response, 303, '', 'text/plain', { Location: location });
+        }
+        if (runAction === 'resolve-resource') {
+          const resource = form.get('resource');
+          if (!/^[a-f0-9-]{36}$/.test(resource ?? '')) throw new CrewError('Invalid resource request');
+          await beginCommand(repo, ['resource', 'resolve', selectedRun, resource, `--note=${form.get('note') ?? ''}`], 'resource.resolved');
+          const location = `/projects/${run.project.id}/epics/${run.epic.id}?run=${run.id}&view=attention#resource-${resource}`;
           return send(response, 303, '', 'text/plain', { Location: location });
         }
         if (form.get('action') === 'dispatch') {

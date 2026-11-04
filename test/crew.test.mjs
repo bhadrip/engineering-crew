@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -10,7 +10,8 @@ import { candidateDiff, createCandidate, gitControl, readProject } from '../lib/
 import { currentAttempt } from '../lib/attempts.mjs';
 import { validateProject } from '../lib/contracts.mjs';
 import { artifact, runStore } from '../lib/run-store.mjs';
-import { decide, dispatch, dispatchInitial, findArtifact, newRun, requestFix, summarize, triageRun, workspaceCatalog } from '../lib/workflow.mjs';
+import { decide, dispatch, dispatchInitial, findArtifact, newRun, requestFix, resolveResource, summarize, triageRun, workspaceCatalog } from '../lib/workflow.mjs';
+import { epicPage, projectPage } from '../ui/views.mjs';
 
 const config = 'examples/hello-world/crew.project.json';
 const websiteConfig = 'examples/hello-world/website.crew.project.json';
@@ -175,6 +176,110 @@ test('a project cannot configure manual triage without a pinned brief or with an
   project.tasks.find(task => task.id === 'website-build').alternateProfiles = ['unknown-engineer'];
   await commitConfig();
   assert.throws(() => readProject(control, websiteConfig), /Unknown alternate profile/);
+});
+
+test('the attention queue gates the handoff and the last resolution resumes it with evidence', async t => {
+  const { snapshot, control } = await fixture(t);
+  snapshot.project.resourcePolicy = { rules: [{ action: 'create-database', mode: 'deny' }] };
+  snapshot.project.tasks[0].budget.maxAttempts = 1;
+  const store = runStore(control.gitDir, 'resources');
+  await store.create(newRun(snapshot, 'resources', config));
+  const reply = { decisions: [], questions: [], blockers: [] };
+  const requests = [
+    { action: 'create-account', target: 'OpenRouter', reason: 'The brief requires an inference account.' },
+    { action: 'create-database', target: 'catalog-prod', reason: 'The brief needs persistent storage.' },
+  ];
+  const blocked = await dispatch(store, 'product-review', undefined, undefined, async () => ({
+    outcome: 'completed', receipt: {}, response: { ...reply, state: 'blocked', summary: 'Setup needed',
+      outputs: [], resourceRequests: requests },
+  }));
+  const raw = await store.read();
+  const run = summarize(raw);
+  const [project] = workspaceCatalog([raw]);
+  assert.deepEqual(run.pendingResources.map(resource => resource.target), ['OpenRouter', 'catalog-prod']);
+  assert.match(projectPage(project, 'attention'), /Create account · OpenRouter/);
+  const page = epicPage(project, project.epics[0], run, { view: 'attention' });
+  assert.match(page, /Confirm resource ready/);
+  assert.match(page, /Continue with alternative/);
+  assert.match(page, new RegExp(blocked.receiptId));
+  await assert.rejects(dispatch(store, 'product-review'), /Resolve the resource requests/);
+  await assert.rejects(decide(store, 'product-review', blocked.id, 'rework', 'Ignore setup'), /Resolve the resource requests/);
+  const [account, database] = run.pendingResources;
+  const ready = await resolveResource(store, account.id, 'Account set up for the crew.', undefined, undefined,
+    () => assert.fail('Still waiting for the database decision'));
+  assert.deepEqual(ready.attempts, []);
+
+  const resume = () => resolveResource(store, database.id, 'Use the existing catalog database.', undefined, undefined,
+    async ({ attempt, inputs }) => {
+      assert.equal(attempt.resumedFrom, blocked.id);
+      const records = inputs.filter(input => input.provenance.source === 'resource-resolution').map(input => JSON.parse(input.content));
+      assert.deepEqual(records.map(record => [record.target, record.disposition]), [['OpenRouter', 'ready'], ['catalog-prod', 'declined']]);
+      return { outcome: 'completed', receipt: {}, response: { ...reply, state: 'completed', summary: 'Criteria prepared',
+        outputs: [{ slot: 'criteria', content: 'List available pets.' }], resourceRequests: [] } };
+    });
+  const attempts = await Promise.allSettled([resume(), resume()]);
+  assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1);
+  assert.match(attempts.find(result => result.status === 'rejected').reason.message, /no longer open/);
+  const resumed = summarize(await store.read());
+  assert.equal(resumed.tasks[0].attempts.length, 2);
+  assert.equal(resumed.handoffs.review, 1);
+  assert.deepEqual(resumed.pendingResources, []);
+});
+
+test('an unevidenced resource request leaves a failed handoff and no provisionable item', async t => {
+  const { snapshot, control } = await fixture(t);
+  const store = runStore(control.gitDir, 'unevidenced');
+  await store.create(newRun(snapshot, 'unevidenced', config));
+  const attempt = await dispatch(store, 'product-review', undefined, undefined, async () => ({
+    outcome: 'completed', response: { state: 'blocked', summary: 'Setup needed', decisions: [], questions: [],
+      blockers: [], outputs: [], resourceRequests: [{ action: 'create-repository', target: 'org/catalog', reason: 'Host the code.' }] },
+  }));
+  assert.equal(attempt.outcome, 'invalid-result');
+  assert.match(attempt.error, /needs a recorded execution receipt/);
+  const run = summarize(await store.read());
+  assert.deepEqual(run.pendingResources, []);
+  assert.deepEqual(run.attentionTasks.map(task => task.id), ['product-review']);
+});
+
+test('only an exact rule and local binding can provision a requested resource', async t => {
+  const { snapshot, control, repo } = await fixture(t);
+  const action = 'create-table';
+  const target = 'dev.catalog';
+  snapshot.project.resourcePolicy = { rules: [{ action, mode: 'deny' }, { action, target, mode: 'auto' }] };
+  validateProject(snapshot.project);
+  assert.throws(() => validateProject({ ...snapshot.project, resourcePolicy: { rules: [{ action, mode: 'auto' }] } }),
+    /require an exact target/);
+  const reply = { decisions: [], questions: [], blockers: [], outputs: [] };
+  const execute = async ({ attempt, task }) => attempt.resumedFrom
+    ? { outcome: 'completed', receipt: {}, response: { ...reply, state: 'completed', summary: 'Ready',
+      outputs: task.outputs.map(slot => ({ slot: slot.id, content: 'Fixture output.' })) } }
+    : { outcome: 'completed', receipt: {}, response: { ...reply, state: 'blocked', summary: 'Table needed',
+      resourceRequests: [{ action, target, reason: 'Store catalog rows.' }] } };
+  const missing = runStore(control.gitDir, 'missing');
+  await missing.create(newRun(snapshot, 'missing', config));
+  await dispatch(missing, 'product-review', undefined, undefined, execute, control);
+  assert.equal((await missing.read()).resources[0].automatic.status, 'unavailable');
+
+  const marker = join(repo, 'provisioned');
+  const path = join(control.gitDir, 'engineering-crew', 'provisioners.json');
+  const binding = { project: snapshot.project.id, action, target };
+  await writeFile(path, JSON.stringify([{ ...binding, command: [process.execPath, '-e', 'process.exit(1)'] }]), { mode: 0o600 });
+  const failed = runStore(control.gitDir, 'failed');
+  await failed.create(newRun(snapshot, 'failed', config));
+  await dispatch(failed, 'product-review', undefined, undefined, execute, control);
+  assert.equal((await failed.read()).resources[0].automatic.status, 'failed');
+
+  await writeFile(path, JSON.stringify([{ ...binding, command: [process.execPath, '-e',
+    'require("node:fs").appendFileSync(process.argv[1], "provisioned")', marker] }]));
+  const auto = runStore(control.gitDir, 'auto');
+  await auto.create(newRun(snapshot, 'auto', config));
+  const results = await dispatchInitial(auto, undefined, undefined, execute, control);
+  assert.deepEqual(results.map(attempt => attempt.result.state), ['completed', 'completed']);
+  assert.equal(await readFile(marker, 'utf8'), 'provisioned');
+  const provisioned = summarize(await auto.read());
+  assert.equal(provisioned.resources[0].resolution.source, 'provisioner');
+  assert.equal(provisioned.handoffs.review, 2);
+  assert.deepEqual(provisioned.pendingResources, []);
 });
 
 test('an incomplete result needs rework and acceptance requires evidence from the new attempt', async t => {

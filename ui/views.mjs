@@ -1,5 +1,6 @@
 import { currentAttempt, currentAttempts } from '../lib/attempts.mjs';
 import { verifiedTraceLink } from '../lib/langfuse.mjs';
+import { isProvisioning, resourceWait } from '../lib/resources.mjs';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -15,7 +16,7 @@ function status(attempt) {
   if (attempt.outcome === 'check-failed' && !attempt.decision) {
     return ['Docker checks failed', attempt.error ?? 'Open the check receipt for the observed results.', 'warning'];
   }
-  if (attempt.result?.state === 'completed' && attempt.evidenceStatus === 'missing') {
+  if ((attempt.result?.state === 'completed' || attempt.resourceIds?.length) && attempt.evidenceStatus === 'missing') {
     return ['Evidence incomplete', 'A required output or execution receipt is missing or no longer matches the record.', 'warning'];
   }
   if (!attempt.decision && attempt.reviewFindings?.some(finding => finding.severity === 'blocker')) {
@@ -25,6 +26,7 @@ function status(attempt) {
   if (attempt.decision?.disposition === 'rework') return ['Rework requested', attempt.decision.note, 'warning'];
   if (attempt.outcome === 'running') return ['Codex is working', 'This page refreshes while the attempt runs.', 'neutral'];
   if (attempt.result?.state === 'completed') return ['Ready for review', 'Open the returned artifacts and record a decision.', 'neutral'];
+  if (attempt.resourceIds?.length) return ['Paused for resources', attempt.result.summary, 'warning'];
   if (attempt.result?.state === 'blocked') return ['Agent reported a blocker', attempt.result.summary, 'warning'];
   return ['Attempt needs attention', attempt.error ?? attempt.result?.summary ?? 'Review the attempt before retrying.', 'warning'];
 }
@@ -87,6 +89,11 @@ function waitingOn(run, task) {
 function taskStatus(run, task) {
   if (run.triagePending) return ['Awaiting triage', 'Confirm the team before dispatching work.', 'neutral'];
   const latest = currentAttempt(task);
+  if (latest?.resourceIds?.length && latest.evidenceStatus === 'missing') return status(latest);
+  const resources = resourceWait(run, task);
+  if (resources.length) return resources.some(resource => !resource.resolution)
+    ? ['Waiting for resources', 'Open Needs attention to resolve the resource requests for this handoff.', 'warning']
+    : ['Resource decisions recorded', 'Continue this handoff using the recorded resource decisions.', 'warning'];
   const waiting = waitingOn(run, task);
   return !latest && waiting.length
     ? ['Waiting on handoffs', `Waiting for ${waiting.map(item => item.packet.title).join(', ')}.`, 'neutral']
@@ -98,15 +105,33 @@ function projectHeader(project, current) {
   const initials = project.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
   return `<header class="mast"><div class="mast-inner"><a class="project-home" href="${path}"><span class="project-monogram" aria-hidden="true">${escape(initials)}</span>${escape(project.name)}</a>
 <nav aria-label="Project navigation"><a href="${path}"${current === 'epics' ? ' aria-current="page"' : ''}>Epics</a>
+<a href="${path}/attention"${current === 'attention' ? ' aria-current="page"' : ''}>Needs attention</a>
 <a href="${path}/agents"${current === 'agents' ? ' aria-current="page"' : ''}>${escape(project.crewName)}</a></nav></div></header>`;
 }
 
-export function projectPage(project, showAgents = false, { query = '', status: filter, configurations = [] } = {}) {
+function projectAttention(project) {
+  const entries = project.epics.flatMap(epic => epic.runs.flatMap(run => {
+    if (!run.handoffs.attention && !run.triagePending) return [];
+    const active = { ...run, project, epic };
+    const rows = [
+      ...(run.triagePending ? [`<li><a href="${epicViewHref(active, 'triage')}">Confirm team assignments ${arrow}</a></li>`] : []),
+      ...run.pendingResources.map(resource => `<li><a href="${epicViewHref(active, 'attention', `#resource-${resource.id}`)}">${resourceLabel(resource)} ${arrow}</a></li>`),
+      ...run.attentionTasks.map(task => `<li><a href="${taskHref(run.id, task.id)}">${escape(task.title)} ${arrow}</a></li>`),
+    ];
+    return [`<section class="record-section"><h2><a href="${epicViewHref(active, run.triagePending ? 'triage' : 'attention')}">${escape(epicName(epic))}</a></h2>
+<p class="muted">Run <code>${escape(run.id)}</code></p><ul class="index-list">${rows.join('')}</ul></section>`];
+  }));
+  return layout(`Needs attention · ${project.name}`, `${projectHeader(project, 'attention')}<main><h1>Needs attention</h1>
+${entries.length ? entries.join('') : '<p>No work in this project is waiting for attention.</p>'}</main>`);
+}
+
+export function projectPage(project, view, { query = '', status: filter, configurations = [] } = {}) {
   const path = projectHref(project);
+  if (view === 'attention') return projectAttention(project);
   const agents = `<ul class="index-list">${project.profiles.map(profile => `<li>
 <a href="${artifactHref(profile.configurationRun ?? project.configurationRun, profile.instructionId)}?view=agents">${escape(profile.name)}</a>
 <p>${escape(profile.remit)}</p></li>`).join('')}</ul>`;
-  if (showAgents) {
+  if (view === 'agents') {
     return layout(`${project.name} · Agents`, `${projectHeader(project, 'agents')}<main>
 <h1>${escape(project.crewName)}</h1>
 <section class="record-section"><h2>Orchestration settings</h2>
@@ -121,6 +146,9 @@ ${config.error ? `<p>${escape(config.error)}</p>` : `<p><code>${escape(config.pa
 ${policy ? `<p>${escape(title(policy.buildTask))} → ${policy.reviewTasks.map(id => escape(title(id))).join(' + ')}</p>
 <p>${policy.maxFixLoops} maximum fix ${policy.maxFixLoops === 1 ? 'loop' : 'loops'} · Decision owner ${escape(policy.decisionOwner)}</p>`
     : '<p>No implementation reviews configured.</p>'}`}
+${settings?.resourcePolicy?.rules.length ? `<p><strong>Resource rules</strong></p><ul>${settings.resourcePolicy.rules.map(rule =>
+      `<li>${escape(rule.action)} · ${escape(rule.target ?? 'Any target')} · ${escape(resourceModes[rule.mode])}</li>`).join('')}</ul>`
+      : '<p>Resource setup defaults to manual confirmation.</p>'}
 <p><a href="${artifactHref(latest.id, 'project-config')}?view=agents">View the latest run’s pinned configuration</a></p></li>`;
   }).join('')}</ul></section>
 <section class="record-section"><h2>Configured agents</h2>${agents}</section></main>`);
@@ -144,9 +172,9 @@ ${policy ? `<p>${escape(title(policy.buildTask))} → ${policy.reviewTasks.map(i
 ${entries.length ? `<div class="epic-table" role="table" aria-label="Epics"><div class="epic-row column-headings" role="row"><span role="columnheader">Epic</span><span role="columnheader">Status</span><span role="columnheader">Handoffs</span><span role="columnheader">Updated</span></div>
 ${entries.map(epic => {
     const run = epic.runs[0];
-    const [, label, tone] = runState(run);
+    const [state, label, tone] = runState(run);
     return `<div class="epic-row" role="row"><div role="cell"><a class="epic-row-title" href="${epicHref(project, epic)}"><span class="item-code">${escape(epicCode(epic))}</span>${escape(epicName(epic))}${arrow}</a><p>${escape(epic.goal)}</p></div>
-<div role="cell">${stateBadge(label, tone)}</div><div role="cell" class="handoff-count"><strong>${run.handoffs.accepted}/${run.handoffs.total}</strong><span>accepted</span></div>
+<div role="cell">${state === 'attention' ? `<a href="${epicViewHref({ ...run, project, epic }, 'attention')}">${stateBadge(label, tone)}</a>` : stateBadge(label, tone)}</div><div role="cell" class="handoff-count"><strong>${run.handoffs.accepted}/${run.handoffs.total}</strong><span>accepted</span></div>
 <div role="cell" class="last-activity">${run.latestActivity ? `<a href="${epicViewHref({ id: run.id, project, epic }, 'activity')}" aria-label="${escape(activityLabel(run.latestActivity.title, run.latestActivity.action))}">${timestamp(run.latestActivity.at)}</a>` : '<span>No activity yet</span>'}</div></div>`;
   }).join('')}</div>` : `<div class="empty-state"><h2>No matching epics</h2><p>Try a different search or status.</p><a href="${path}">Clear filters</a></div>`}
 ${decisions.length ? `<section class="project-activity"><div class="section-title"><h2>Recent decisions</h2></div>${eventList(decisions)}</section>` : ''}</main>`);
@@ -163,12 +191,14 @@ function activityLabel(title, action) {
 
 export function epicPage(project, epic, run, { step, view, query = '', type } = {}) {
   const tabs = { ...(run.triage ? { triage: 'Triage' } : {}), overview: 'Overview', workflow: 'Workflow',
+    ...(run.handoffs.attention || run.resources?.length || view === 'attention' ? { attention: 'Needs attention' } : {}),
     ...(run.fix ? { reviews: 'Reviews' } : {}),
     ...(run.tasks.some(task => task.packet.execution) ? { checks: 'Checks' } : {}), usage: 'Usage', activity: 'Activity' };
-  const selected = Object.hasOwn(tabs, view) || view === 'search' ? view : step ? 'workflow' : run.triagePending ? 'triage' : 'overview';
+  const selected = Object.hasOwn(tabs, view) || view === 'search' ? view
+    : step ? 'workflow' : run.triagePending ? 'triage' : run.pendingResources.length ? 'attention' : 'overview';
   const [, label, tone] = runState(run);
   const content = selected === 'triage' ? triagePanel(run) : selected === 'workflow' ? pipelinePanel(run, step) : selected === 'checks' ? checksPanel(run)
-    : selected === 'reviews' ? reviewsPanel(run) : selected === 'usage' ? usagePanel(run) : selected === 'activity' ? activityPanel(run)
+    : selected === 'attention' ? attentionPanel(run) : selected === 'reviews' ? reviewsPanel(run) : selected === 'usage' ? usagePanel(run) : selected === 'activity' ? activityPanel(run)
       : selected === 'search' ? searchPanel(run, query, type) : overviewPanel(run, epic);
   return layout(`${epicName(epic)} · ${project.name}`, `${projectHeader(project)}<main data-epic-view>
 <nav class="breadcrumbs" aria-label="Location"><a href="${projectHref(project)}">Epics</a><span aria-hidden="true">/</span><span>${escape(epicCode(epic))}</span></nav>
@@ -178,7 +208,50 @@ export function epicPage(project, epic, run, { step, view, query = '', type } = 
     `<a href="${epicViewHref(run, value)}"${value === selected ? ' aria-current="page"' : ''}>${title}</a>`).join('')}</nav>
 <form class="epic-search" role="search" aria-label="Search this run" action="${epicHref(project, epic)}"><input type="hidden" name="run" value="${escape(run.id)}"><input type="hidden" name="view" value="search">
 <label class="search-field"><span class="visually-hidden">Search this run</span><input type="search" data-search name="q" value="${escape(query)}" placeholder="Search this run…" maxlength="160"><kbd>/</kbd></label><button type="submit" class="search-submit" aria-label="Search">${searchIcon}</button></form></div>
-<div class="epic-content">${content}</div></main>`, run.handoffs.running && selected !== 'search');
+<div class="epic-content">${content}</div></main>`, selected === 'attention'
+    ? !run.pendingResources.length && run.handoffs.running
+    : run.handoffs.running && selected !== 'search');
+}
+
+const resourceModes = { manual: 'Manual setup', deny: 'Denied by policy', auto: 'Automatic setup allowed' };
+const resourceLabel = resource => `${escape(resource.action.replaceAll('-', ' ').replace(/^./, letter => letter.toUpperCase()))} · ${escape(resource.target)}`;
+
+function attentionPanel(run) {
+  const open = new Set(run.pendingResources.map(resource => resource.id));
+  const resourceCard = resource => {
+    const task = run.tasks.find(task => task.packet.id === resource.taskId);
+    const attempt = task.attempts.find(attempt => attempt.id === resource.attemptId);
+    const { resolution, mode, automatic, id } = resource;
+    const provisioning = isProvisioning(resource);
+    const resolutionLabel = resolution?.disposition === 'declined' ? 'Alternative recorded'
+      : resolution?.source === 'provisioner' ? 'Provisioner reported success' : 'Operator confirmed setup';
+    const missing = attempt.evidenceStatus !== 'recorded';
+    const message = missing ? 'The request is missing its execution receipt.'
+      : provisioning ? 'The configured provisioner is running. Refresh to check its status.'
+      : automatic?.status === 'running' ? 'Automatic setup timed out. Verify the resource before confirming it.'
+        : automatic?.detail;
+    return `<article class="resource-card" id="resource-${id}">
+<div class="section-title"><h3>${resourceLabel(resource)}</h3>${stateBadge(resolution ? resolutionLabel : resourceModes[mode], resolution ? 'success' : 'warning')}</div>
+<p>${escape(resource.reason)}</p>
+<p class="muted"><a href="${taskHref(run.id, task.packet.id)}#attempt-${attempt.number}">${escape(task.packet.title)} · Attempt ${attempt.number}</a>
+${attempt.receiptId ? ` · <a href="${artifactHref(run.id, attempt.receiptId, task.packet.id)}&amp;view=attention">Execution receipt</a>` : ''}</p>
+${resolution ? `<p>${escape(resolution.note)}</p><p><a href="${artifactHref(run.id, resolution.artifactId, task.packet.id)}&amp;view=attention">View resource resolution ${arrow}</a></p>`
+      : open.has(id) ? `${message ? `<p>${escape(message)}</p>` : ''}
+${provisioning || missing ? '' : `<form class="decision" method="post" action="${runHref(run.id)}/resolve-resource">
+<input type="hidden" name="resource" value="${id}">
+<label for="note-${id}">${mode === 'deny' ? 'Alternative approach' : 'Setup confirmation'}</label>
+<textarea id="note-${id}" name="note" rows="2" required maxlength="1000" placeholder="${mode === 'deny' ? 'Describe how work can proceed without this resource.' : 'Record what is ready. Use identifiers only.'}"></textarea>
+<div class="buttons"><button type="submit">${mode === 'deny' ? 'Continue with alternative' : 'Confirm resource ready'}</button></div></form>`}`
+        : '<p class="muted">This request is no longer active.</p>'}</article>`;
+  };
+  const resources = run.resources ?? [];
+  return `<section class="record-section attention-panel"><div class="section-title"><h2>Needs attention</h2>
+<a href="${artifactHref(run.id, 'project-config')}?view=attention">Pinned resource policy ${arrow}</a></div>
+${!open.size && !run.attentionTasks.length ? '<p>No handoffs are waiting for attention.</p>' : ''}
+${resources.filter(resource => open.has(resource.id)).map(resourceCard).join('')}
+${run.attentionTasks.length ? `<h3>Handoffs to review</h3><ul class="index-list">${run.attentionTasks.map(task =>
+    `<li><a href="${taskHref(run.id, task.id)}">${escape(task.title)} ${arrow}</a></li>`).join('')}</ul>` : ''}
+${resources.some(resource => !open.has(resource.id)) ? `<h3>Resource history</h3>${resources.filter(resource => !open.has(resource.id)).map(resourceCard).join('')}` : ''}</section>`;
 }
 
 function activityEvents(run) {
@@ -467,6 +540,7 @@ function pipelineDetails(run, task, taskById) {
 <p class="muted">${escape(profile.name)} · Decision owner ${escape(packet.acceptedBy)}</p>
 <p class="muted">Cost owner · ${escape(task.usage.costOwner ?? 'Unrecorded')} · <a href="${epicViewHref(run, 'usage')}">Task usage</a></p>
 <p>${escape(latest?.result?.summary ?? description)}</p>
+${latest?.resourceIds?.length ? `<p><a href="${epicViewHref(run, 'attention')}">View resource requests ${arrow}</a></p>` : ''}
 ${packet.prerequisites.length ? `<p class="pipeline-deps"><strong>Depends on</strong> ${packet.prerequisites.map(id =>
     `<a href="${pipelineHref(run, id)}">${escape(taskById.get(id).packet.title)}</a>`).join(' · ')}</p>` : ''}
 <div class="pipeline-artifacts"><section><h4>Inputs</h4>${links(run, packet.id, inputs, 'pipeline')}</section>
@@ -512,7 +586,13 @@ function controls(run, task, waiting) {
   if (waiting.length) return '';
   const { packet } = task;
   const attempt = currentAttempt(task);
-  const attemptsAtRevision = currentAttempts(task).filter(item => item.packetRevision === packet.revision).length;
+  const resources = resourceWait(run, task);
+  if (resources.some(resource => !resource.resolution)) {
+    return `<a href="${epicViewHref(run, 'attention')}">View resource requests ${arrow}</a>`;
+  }
+  if (resources.length) return `<form method="post" action="${taskHref(run.id, packet.id)}">
+<button name="action" value="dispatch">Resume handoff</button></form>`;
+  const attemptsAtRevision = currentAttempts(task).filter(item => item.packetRevision === packet.revision && !item.resourceIds?.length).length;
   const rework = attempt?.decision?.disposition === 'rework';
   const dispatch = !attempt || (rework && attemptsAtRevision < packet.budget.maxAttempts);
   const action = taskHref(run.id, packet.id);
@@ -558,6 +638,7 @@ ${latest?.result ? `<p>${escape(latest.result.summary)}</p>${[['Questions', late
 <section><h2>Usage</h2><p>${costSummary(task.usage)}</p><p class="muted">${number(packet.budget.targetTotalTokens)} token target per attempt</p></section>
 ${attempts.length ? `<section><h2>Attempt history</h2><ol class="history">${attempts.map(attempt => `<li id="attempt-${attempt.number}">
 <strong>Attempt ${attempt.number}</strong> · ${escape(status(attempt)[0])}${attempt.packetId ? ` · <a href="${artifactHref(run.id, attempt.packetId, packet.id)}">Packet revision ${attempt.packetRevision}</a>` : ''}${attempt.receiptId ? ` · <a href="${artifactHref(run.id, attempt.receiptId, packet.id)}">Receipt</a>` : ''}
+${attempt.resumedFrom ? ` · Resumed after <a href="${epicViewHref(run, 'attention')}">resource setup</a>` : ''}
 ${Object.values(attempt.result?.artifacts ?? {}).map(id => ` · <a href="${artifactHref(run.id, id, packet.id)}">Output</a>`).join('')}
 ${traceLink(attempt) ? ` · ${traceLink(attempt)}` : ''}
 ${attempt.usage ? `<p class="muted">${number(attempt.usage.total)} tokens reported${attempt.overTokenTarget ? ' · above token target' : ''}${attempt.estimatedUsd === null ? '' : ` · ${dollars.format(attempt.estimatedUsd)} estimated`}</p>` : ''}
@@ -568,9 +649,12 @@ ${attempt.decision ? `<p class="muted">${escape(attempt.decision.owner)} recorde
 export function artifactPage(artifact, run, fromTask, view) {
   const provenance = artifact.provenance.source === 'git' ? `Git · ${artifact.provenance.path} · ${artifact.provenance.sourceCommit}`
     : artifact.provenance.source === 'triage' ? `Triage · Git baseline ${artifact.provenance.sourceCommit}`
-      : `${artifact.provenance.source} · ${artifact.provenance.attemptId}`;
+      : artifact.provenance.source === 'resource-resolution'
+        ? `Resource resolution · Git baseline ${artifact.provenance.sourceCommit} · Attempt ${artifact.provenance.attemptId}`
+        : `${artifact.provenance.source} · ${artifact.provenance.attemptId}`;
   let back = [projectHref(run.project), 'Back to project'];
   if (fromTask && view === 'pipeline') back = [pipelineHref(run, fromTask), 'Back to the pipeline step'];
+  else if (view === 'attention') back = [epicViewHref(run, 'attention'), 'Back to Needs attention'];
   else if (fromTask) back = [taskHref(run.id, fromTask), 'Back to the handoff'];
   else if (view === 'agents') back = [`${projectHref(run.project)}/agents`, 'Back to agents'];
   else if (view === 'checks') back = [epicViewHref(run, 'checks'), 'Back to checks'];
