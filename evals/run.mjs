@@ -23,6 +23,12 @@ export async function loadSuite(suitePath) {
   requireField(cases.length && new Set(cases.map(item => id(item.id, 'case ID'))).size === cases.length &&
     cases.every(item => Object.hasOwn(rubric, item.id) && ['regression', 'transfer'].includes(item.split)) &&
     Object.keys(rubric).length === cases.length, 'Cases and rubric must map one to one');
+  if (task.tasks) {
+    requireField(cases.every(item => Object.hasOwn(task.tasks, item.task) && Array.isArray(item.artifacts) &&
+      item.artifacts.length && new Set(item.artifacts.map(([id]) => id)).size === item.artifacts.length &&
+      item.artifacts.every(([id, title, kind, content]) => [id, title, kind, content].every(value =>
+        typeof value === 'string' && value.trim()))), 'Packet cases need a declared task and unique named artifacts');
+  }
   const { grade } = await import(pathToFileURL(join(root, suitePath, 'grade.mjs')));
   return { digest, task, cases, rubric, grade };
 }
@@ -40,16 +46,18 @@ export function loadProfile(entry, ref) {
 
 export function assignment(suite, item) {
   const provenance = { source: 'fixture' };
-  const inputs = [
+  const inputs = suite.task.tasks ? item.artifacts.map(([id, title, kind, content]) =>
+    artifact(id, title, kind, content, provenance)) : [
     artifact('approved-plan', 'Approved plan and environment', 'markdown', item.plan, provenance),
     artifact('candidate-diff', 'Pinned candidate diff', 'diff', item.changes.map(change => change.diff).join('\n'), provenance),
     ...(item.evidence ? [artifact('check-receipt', 'Available verification evidence', 'text', item.evidence, provenance)] : []),
   ];
-  return { task: { ...suite.task, inputArtifacts: inputs.map(input => input.id) }, inputs };
+  const task = suite.task.tasks?.[item.task] ?? suite.task;
+  return { task: { ...task, inputArtifacts: inputs.map(input => input.id) }, inputs };
 }
 
 export function score(suite, item, observation) {
-  return suite.grade(observation, suite.task, suite.rubric[item.id]);
+  return suite.grade(observation, suite.task.tasks?.[item.task] ?? suite.task, suite.rubric[item.id]);
 }
 
 export const runtimeDigest = () => artifactDigest(JSON.stringify(['lib/codex.mjs', 'lib/contracts.mjs', 'evals/run.mjs'].map(read)));

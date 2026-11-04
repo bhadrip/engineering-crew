@@ -55,11 +55,14 @@
     },
     {
       "id": "sdm",
-      "revision": 2,
+      "revision": 3,
       "name": "Software Development Manager",
       "remit": "Agree the plan, route work, and hand the candidate to QA.",
       "instructions": "examples/hello-world/crew/sdm.md",
-      "skills": [],
+      "skills": [
+        "examples/hello-world/crew/skills/plan-crew-delivery/SKILL.md",
+        "examples/hello-world/crew/skills/gate-crew-delivery/SKILL.md"
+      ],
       "tools": []
     },
     {

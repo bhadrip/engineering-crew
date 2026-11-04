@@ -100,7 +100,8 @@ choose one with `crew ui --project-id <project>` or `crew ui <run>`.
 
 ### Agent skills and evals
 
-The Security Engineer is the first profile with a researched skill and a fixed
-behavioral benchmark. [Agent development pattern](docs/agent-development.md)
-explains how to develop another role. Changes to active skills require fresh
-eval evidence; `npm test` regrades the recorded results offline.
+The [Security Engineer](docs/security-engineer-pilot.md) and [SDM](docs/sdm-pilot.md)
+use researched skills and fixed behavioral benchmarks. The
+[agent development pattern](docs/agent-development.md) explains how to develop
+another role. Changes to active skills require fresh eval evidence;
+`npm test` regrades the recorded results offline.

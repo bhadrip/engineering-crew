@@ -1,0 +1,235 @@
+{
+  "tasks": {
+    "implementation-plan": {
+      "id": "implementation-plan",
+      "revision": 1,
+      "title": "SDM implementation plan",
+      "profileId": "sdm",
+      "objective": "Reconcile both reviews into one executable plan. Assign engineering and QA, describe permissions and explicit acceptance gates.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "product-review",
+        "lead-review"
+      ],
+      "inputs": [
+        "brief"
+      ],
+      "handoffInputs": [
+        {
+          "task": "product-review",
+          "slot": "criteria"
+        },
+        {
+          "task": "lead-review",
+          "slot": "technical-review"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "plan",
+          "title": "Implementation plan",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Name assignments and why, allowed Git paths, dependencies, and test strategy."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-brief.md"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    "candidate-handoff": {
+      "id": "candidate-handoff",
+      "revision": 1,
+      "title": "SDM candidate handoff",
+      "profileId": "sdm",
+      "objective": "Review the exact candidate and author test receipt. Return a QA packet that names the candidate commit and scope and keeps author implementation details out of independent QA.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "build-catalog",
+        "product-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "build-catalog",
+          "slot": "candidate"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "check-receipt"
+        },
+        {
+          "task": "product-review",
+          "slot": "criteria"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "qa-packet",
+          "title": "Candidate handoff to QA",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Name the exact candidate and the independent black-box verification scope."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    },
+    "website-plan": {
+      "id": "website-plan",
+      "revision": 1,
+      "title": "SDM website plan",
+      "profileId": "sdm",
+      "objective": "Combine accepted UX and visual recommendations into a scoped engineering plan. Identify decisions still open and how QA can verify the work.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "ux-review",
+        "visual-review"
+      ],
+      "inputs": [
+        "brief"
+      ],
+      "handoffInputs": [
+        {
+          "task": "ux-review",
+          "slot": "ux-spec"
+        },
+        {
+          "task": "visual-review",
+          "slot": "visual-spec"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "build-plan",
+          "title": "Website implementation plan",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Reconcile both design inputs, assign work and dependencies, and specify observable checks for WEB-1 through WEB-3."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-website-brief.md"
+        ]
+      },
+      "acceptedBy": "Project owner"
+    },
+    "website-delivery": {
+      "id": "website-delivery",
+      "revision": 1,
+      "title": "Website delivery review",
+      "profileId": "sdm",
+      "objective": "Summarize the accepted implementation reviews and the exact prototype candidate for the project owner. Record deferred work and any remaining browser validation.",
+      "criteria": [
+        "WEB-1",
+        "WEB-2",
+        "WEB-3"
+      ],
+      "prerequisites": [
+        "website-build",
+        "ux-implementation-review",
+        "visual-implementation-review",
+        "lead-designer-review",
+        "security-engineer-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "website-build",
+          "slot": "candidate"
+        },
+        {
+          "task": "website-build",
+          "slot": "check-receipt"
+        },
+        {
+          "task": "ux-implementation-review",
+          "slot": "findings"
+        },
+        {
+          "task": "visual-implementation-review",
+          "slot": "findings"
+        },
+        {
+          "task": "lead-designer-review",
+          "slot": "findings"
+        },
+        {
+          "task": "security-engineer-review",
+          "slot": "findings"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "delivery",
+          "title": "Website delivery notes",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Identify the candidate, review outcomes, and backlog with any limitations."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 30000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    }
+  }
+}
