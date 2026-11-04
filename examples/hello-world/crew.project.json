@@ -1,0 +1,626 @@
+{
+  "schemaVersion": 1,
+  "id": "pet-store",
+  "name": "Pet Store",
+  "crewName": "Beaver Crew",
+  "epic": {
+    "id": "epic-1",
+    "title": "Epic 1 · List the available pets",
+    "goal": "Let visitors list the fictional pets available at the store from the Hello World CLI."
+  },
+  "runtime": {
+    "kind": "codex"
+  },
+  "inputs": [
+    {
+      "id": "brief",
+      "title": "Pet store brief",
+      "path": "examples/hello-world/pet-store-brief.md"
+    },
+    {
+      "id": "baseline",
+      "title": "Current CLI behavior",
+      "path": "examples/hello-world/README.md"
+    },
+    {
+      "id": "cli-source",
+      "title": "Baseline CLI source",
+      "path": "examples/hello-world/hello.mjs"
+    },
+    {
+      "id": "cli-tests",
+      "title": "Baseline author tests",
+      "path": "examples/hello-world/hello.test.mjs"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "catalog-product",
+      "revision": 1,
+      "name": "Product Manager",
+      "remit": "Own customer outcomes, scope, and testable criteria.",
+      "instructions": "examples/hello-world/crew/product-review.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "lead-engineer",
+      "revision": 1,
+      "name": "Lead Engineer",
+      "remit": "Own the technical approach, test strategy, and build readiness.",
+      "instructions": "examples/hello-world/crew/lead-engineer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "sdm",
+      "revision": 1,
+      "name": "Software Development Manager",
+      "remit": "Agree the plan, route work, and hand the candidate to QA.",
+      "instructions": "examples/hello-world/crew/sdm.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "engineer",
+      "revision": 1,
+      "name": "Software Engineer",
+      "remit": "Return scoped implementation and author tests.",
+      "instructions": "examples/hello-world/crew/engineer.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "qa",
+      "revision": 1,
+      "name": "Independent QA",
+      "remit": "Design black-box checks against approved requirements.",
+      "instructions": "examples/hello-world/crew/qa.md",
+      "skills": [],
+      "tools": []
+    },
+    {
+      "id": "reviewer",
+      "revision": 1,
+      "name": "Delivery Reviewer",
+      "remit": "Review the candidate and verification for project-owner review.",
+      "instructions": "examples/hello-world/crew/reviewer.md",
+      "skills": [],
+      "tools": []
+    }
+  ],
+  "tasks": [
+    {
+      "id": "product-review",
+      "revision": 1,
+      "title": "Product review",
+      "profileId": "catalog-product",
+      "objective": "Return observable criteria for the catalog command and existing behavior. Resolve the draft against the brief and baseline.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [],
+      "inputs": [
+        "brief",
+        "baseline"
+      ],
+      "handoffInputs": [],
+      "outputs": [
+        {
+          "id": "criteria",
+          "title": "Product acceptance criteria",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Specify CAT-1 to CAT-3 with expected output streams and exit codes."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-brief.md",
+          "examples/hello-world/README.md"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "lead-review",
+      "revision": 1,
+      "title": "Lead Engineer review",
+      "profileId": "lead-engineer",
+      "objective": "Propose the smallest design for the catalog and an independent test strategy.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [],
+      "inputs": [
+        "brief",
+        "cli-source",
+        "cli-tests"
+      ],
+      "handoffInputs": [],
+      "outputs": [
+        {
+          "id": "technical-review",
+          "title": "Technical review",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Describe argument precedence, allowed files, risks, and author and QA checks."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-brief.md",
+          "examples/hello-world/hello.mjs",
+          "examples/hello-world/hello.test.mjs"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "implementation-plan",
+      "revision": 1,
+      "title": "SDM implementation plan",
+      "profileId": "sdm",
+      "objective": "Reconcile both reviews into one executable plan. Assign engineering and QA, describe permissions and explicit acceptance gates.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "product-review",
+        "lead-review"
+      ],
+      "inputs": [
+        "brief"
+      ],
+      "handoffInputs": [
+        {
+          "task": "product-review",
+          "slot": "criteria"
+        },
+        {
+          "task": "lead-review",
+          "slot": "technical-review"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "plan",
+          "title": "Implementation plan",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Name assignments and why, allowed Git paths, dependencies, and test strategy."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/pet-store-brief.md"
+        ]
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "product-signoff",
+      "revision": 1,
+      "title": "Product plan agreement",
+      "profileId": "catalog-product",
+      "objective": "Approve the received plan if it preserves the Product acceptance criteria. Return a completed result only for approval. Otherwise return blocked with the needed change.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "implementation-plan",
+        "product-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "implementation-plan",
+          "slot": "plan"
+        },
+        {
+          "task": "product-review",
+          "slot": "criteria"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "agreement",
+          "title": "Product agreement",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Explicitly record the decision on the received plan and the reason."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "lead-signoff",
+      "revision": 1,
+      "title": "Lead Engineer plan agreement",
+      "profileId": "lead-engineer",
+      "objective": "Approve the received plan if it can be implemented and tested within the agreed scope. Return a completed result only for approval. Otherwise return blocked with the needed change.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "implementation-plan",
+        "lead-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "implementation-plan",
+          "slot": "plan"
+        },
+        {
+          "task": "lead-review",
+          "slot": "technical-review"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "agreement",
+          "title": "Lead Engineer agreement",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Explicitly record the decision on the received plan and the reason."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "build-catalog",
+      "revision": 1,
+      "title": "Build and author tests",
+      "profileId": "engineer",
+      "objective": "Return complete contents for hello.mjs and hello.test.mjs implementing the approved catalog. Keep the existing CLI behavior and test it at the process boundary.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "implementation-plan",
+        "product-signoff",
+        "lead-signoff"
+      ],
+      "inputs": [
+        "cli-source",
+        "cli-tests"
+      ],
+      "handoffInputs": [
+        {
+          "task": "implementation-plan",
+          "slot": "plan"
+        },
+        {
+          "task": "product-signoff",
+          "slot": "agreement"
+        },
+        {
+          "task": "lead-signoff",
+          "slot": "agreement"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "cli",
+          "title": "Candidate CLI source",
+          "kind": "source",
+          "required": true,
+          "acceptance": "Complete JavaScript file with catalog behavior.",
+          "path": "examples/hello-world/hello.mjs"
+        },
+        {
+          "id": "tests",
+          "title": "Author test source",
+          "kind": "source",
+          "required": true,
+          "acceptance": "Complete JavaScript file with author checks for the new command and preserved cases.",
+          "path": "examples/hello-world/hello.test.mjs"
+        },
+        {
+          "id": "implementation",
+          "title": "Implementation notes",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Explain the behavior change, test coverage, and any limitations."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": [
+          "examples/hello-world/hello.mjs",
+          "examples/hello-world/hello.test.mjs"
+        ]
+      },
+      "acceptedBy": "SDM",
+      "execution": {
+        "kind": "build",
+        "image": "node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914",
+        "entry": "examples/hello-world/hello.mjs",
+        "tests": "examples/hello-world/hello.test.mjs",
+        "files": [
+          "examples/hello-world/hello.mjs",
+          "examples/hello-world/hello.test.mjs"
+        ]
+      }
+    },
+    {
+      "id": "candidate-handoff",
+      "revision": 1,
+      "title": "SDM candidate handoff",
+      "profileId": "sdm",
+      "objective": "Review the exact candidate and author test receipt. Return a QA packet that names the candidate commit and scope and keeps author implementation details out of independent QA.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "build-catalog",
+        "product-review"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "build-catalog",
+          "slot": "candidate"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "check-receipt"
+        },
+        {
+          "task": "product-review",
+          "slot": "criteria"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "qa-packet",
+          "title": "Candidate handoff to QA",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Name the exact candidate and the independent black-box verification scope."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    },
+    {
+      "id": "independent-qa",
+      "revision": 1,
+      "title": "Independent QA",
+      "profileId": "qa",
+      "objective": "Return independent black-box cases from the accepted requirements. The runner will execute them against the exact candidate and record actual stdout, stderr and exit status.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "candidate-handoff",
+        "product-review",
+        "build-catalog"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "candidate-handoff",
+          "slot": "qa-packet"
+        },
+        {
+          "task": "product-review",
+          "slot": "criteria"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "candidate"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "cases",
+          "title": "Independent QA cases",
+          "kind": "check-cases",
+          "required": true,
+          "acceptance": "Return a raw JSON case array with CAT-1, CAT-2, and CAT-3 coverage."
+        },
+        {
+          "id": "qa-notes",
+          "title": "QA test rationale",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Describe how the cases cover the requirements. Do not claim execution."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM",
+      "execution": {
+        "kind": "verify",
+        "image": "node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914",
+        "entry": "examples/hello-world/hello.mjs",
+        "files": [
+          "examples/hello-world/hello.mjs"
+        ],
+        "candidateFrom": "build-catalog",
+        "minCases": {
+          "CAT-1": 1,
+          "CAT-2": 3,
+          "CAT-3": 2
+        }
+      }
+    },
+    {
+      "id": "delivery-review",
+      "revision": 1,
+      "title": "Delivery review",
+      "profileId": "reviewer",
+      "objective": "Decide whether the candidate is ready for project-owner review. Check the Git diff for scope and verify both Docker receipts against the exact candidate.",
+      "criteria": [
+        "CAT-1",
+        "CAT-2",
+        "CAT-3"
+      ],
+      "prerequisites": [
+        "independent-qa",
+        "build-catalog",
+        "implementation-plan"
+      ],
+      "inputs": [],
+      "handoffInputs": [
+        {
+          "task": "independent-qa",
+          "slot": "check-receipt"
+        },
+        {
+          "task": "independent-qa",
+          "slot": "qa-notes"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "candidate"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "check-receipt"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "implementation"
+        },
+        {
+          "task": "build-catalog",
+          "slot": "candidate-diff"
+        },
+        {
+          "task": "implementation-plan",
+          "slot": "plan"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "review",
+          "title": "Delivery review disposition",
+          "kind": "markdown",
+          "required": true,
+          "acceptance": "Summarize evidence, exact candidate, residual limits, and a ready or rework disposition."
+        }
+      ],
+      "budget": {
+        "targetTotalTokens": 40000,
+        "timeoutSeconds": 180,
+        "maxAttempts": 2
+      },
+      "permissions": {
+        "mode": "read-only",
+        "toolNetwork": "denied",
+        "tools": [],
+        "externalActions": [],
+        "writePaths": [],
+        "readPaths": []
+      },
+      "acceptedBy": "SDM"
+    }
+  ]
+}

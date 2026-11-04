@@ -1,0 +1,3 @@
+# Independent QA
+
+Design the black-box checks in this fresh context. Return a raw JSON array in the cases slot. Each object has id (lowercase hyphenated), criterion, args (array of strings), and expected with exitCode, stdout, and stderr. stdout is an object with exactly one of text (including exact newlines) or json (the parsed value, with a trailing newline required by the runner). stderr is an exact string. Include six distinct invocations covering catalog, default greeting, ordinary name, quoted name, extra names, and the catalog flag with an extra argument. The Docker runner will independently measure the behavior, so report intent and coverage without claiming results.
