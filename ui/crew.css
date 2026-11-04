@@ -143,6 +143,19 @@ button.secondary:hover, .search-submit:hover { background: var(--surface); }
 .pipeline-artifacts .links, .pipeline-detail-links { font-size: .84rem; }
 .pipeline-detail-links { margin-top: .8rem; }
 .epic-sections { display: grid; gap: 1.4rem; min-width: 0; }
+.usage-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 0 0 .7rem; }
+.usage-metrics > div { padding: .65rem .75rem; background: var(--surface); border: 1px solid var(--line); border-radius: .32rem; }
+.usage-metrics dt { color: var(--muted); font-size: .83rem; }
+.usage-metrics dd { margin: .15rem 0 0; font-size: 1.05rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: .9rem; overflow-wrap: anywhere; }
+.usage-table th, .usage-table td { text-align: left; vertical-align: top; padding: .5rem .45rem; border-bottom: 1px solid var(--line); }
+.usage-table thead { background: var(--surface); color: var(--muted); }
+.usage-table td { font-variant-numeric: tabular-nums; }
+.usage-table small { display: block; color: var(--muted); font-weight: 400; }
+.usage-attempts { margin-top: .35rem; }
+.usage-attempts summary { color: var(--accent); cursor: pointer; }
+.usage-attempts li { padding: .35rem 0; }
+[id^="usage-"] { scroll-margin-top: .65rem; }
 .qa-cases li, .index-list li { border-top: 1px solid var(--line); padding: .55rem 0; }
 .index-list li p { margin: .15rem 0 0; color: var(--muted); }
 .qa-cases summary { cursor: pointer; overflow-wrap: anywhere; scroll-margin-top: 1rem; }
@@ -203,6 +216,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface)
   .overview-layout, .columns, .grid, .pipeline-artifacts { grid-template-columns: minmax(0,1fr); }
   .overview-layout { gap: 1.3rem; }
   .run-summary { border: 0; padding-left: 0; }
+  .usage-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pipeline-track { flex-direction: column; min-height: 0; }
   .pipeline-track.wide { min-width: 29rem; min-height: 0; }
   .pipeline-row { grid-auto-flow: column; grid-auto-columns: minmax(0,1fr); flex: none; }

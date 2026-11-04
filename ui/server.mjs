@@ -80,7 +80,7 @@ export async function serve({ repo, projectId, port }) {
   const selectedProject = projectId ? projects.find(project => project.id === projectId)
     : projects.length === 1 ? projects[0] : undefined;
   if (!selectedProject) {
-    throw new CrewError(projectId ? `Project ${projectId} has no runs in this checkout`
+    throw new CrewError(projectId ? `Project ${projectId} has no runs in this database`
       : projects.length ? 'Choose the project with --project-id or provide a run ID'
         : 'Start a project run before opening its browser UI');
   }
@@ -111,7 +111,7 @@ export async function serve({ repo, projectId, port }) {
           if (project && !epicId) {
             const configurations = projectView === 'agents' ? await Promise.all(project.epics.map(async epic => {
               try {
-                const config = await call(repo, ['project', 'show', '--project', epic.configurationPath]);
+                const config = await call(repo, ['project', 'show', '--project', project.id, '--epic', epic.id]);
                 if (config.project.id !== project.id || config.project.epic.id !== epic.id) throw new CrewError('Configuration belongs to another epic');
                 return { epic, ...config };
               } catch (error) {

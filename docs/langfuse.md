@@ -26,9 +26,9 @@ By default the trace's Input shows the Crew task reference. Output shows the
 recorded Codex outcome, timing, and reported token counts.
 
 To publish the actual prompt and final response, opt in when dispatching the
-handoff and when exporting its activity. Prompt capture can contain committed
-source and handoff artifacts, so use a Langfuse project authorized to hold that
-data. Capture is stored in the private Git run record.
+handoff and when exporting its activity. Prompt capture can contain project inputs,
+source, and handoff artifacts, so use a Langfuse project authorized to hold that
+data. Crew stores the capture with the run in Postgres.
 
 ```sh
 node bin/crew.mjs task dispatch epic-1-traced product-review --capture-activity

@@ -6,7 +6,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { candidateDiff, createCandidate, gitControl, readProject } from '../lib/git-control.mjs';
+import { captureConfiguration, gitControl, readProject } from '../lib/git-control.mjs';
+import { buildCandidate } from '../lib/candidates.mjs';
+import { executeEvidence } from '../lib/checks.mjs';
+import { importLocal } from '../lib/import-local.mjs';
+import { registerProject, loadProject } from '../lib/project-store.mjs';
+import { setProvisioner } from '../lib/resources.mjs';
+import { memoryRunStore, postgres, testDatabase } from '../test-support/stores.mjs';
 import { currentAttempt } from '../lib/attempts.mjs';
 import { validateProject } from '../lib/contracts.mjs';
 import { artifact, runStore } from '../lib/run-store.mjs';
@@ -52,9 +58,9 @@ test('permission requests beyond the input-only runtime are rejected before disp
 });
 
 test('the static team is recorded at intake and existing runs still dispatch', async t => {
-  const { control, snapshot } = await fixture(t);
+  const { snapshot } = await fixture(t);
   const run = newRun(snapshot, 'static', config);
-  const store = runStore(control.gitDir, run.id);
+  const store = memoryRunStore();
   await store.create(run);
   assert.equal(run.triage.status, 'assigned');
   assert.equal(run.triage.mode, 'static');
@@ -65,7 +71,7 @@ test('the static team is recorded at intake and existing runs still dispatch', a
   const attempt = await dispatch(store, 'product-review', undefined, undefined, execute);
   assert.equal(attempt.triageArtifactId, run.triage.artifactId);
 
-  const legacy = runStore(control.gitDir, 'legacy');
+  const legacy = memoryRunStore();
   const record = newRun(snapshot, 'legacy', config);
   record.artifacts = record.artifacts.filter(value => value.id !== record.triage.artifactId);
   delete record.triage;
@@ -77,7 +83,7 @@ test('the static team is recorded at intake and existing runs still dispatch', a
 test('manual triage gates dispatch and saves exactly one complete team for the pinned brief', async t => {
   const { control } = await fixture(t);
   const run = newRun(readProject(control, websiteConfig), 'intake', websiteConfig);
-  const store = runStore(control.gitDir, run.id);
+  const store = memoryRunStore();
   await store.create(run);
   const override = { taskId: 'website-build', profileId: 'frontend-engineer' };
   const approve = (owner, ...overrides) => triageRun(store, owner, 'The brief needs responsive interactions.', overrides);
@@ -104,8 +110,9 @@ test('manual triage gates dispatch and saves exactly one complete team for the p
   await assert.rejects(dispatch(store, 'website-build'), /Waiting for accepted handoff/);
 });
 
-test('the CLI starts the initial assignments on static intake or manual confirmation', async t => {
+test('the CLI starts the initial assignments on static intake or manual confirmation', { skip: !postgres }, async t => {
   const { repo } = await fixture(t);
+  const { url } = await testDatabase(t);
   const fakeCodex = join(repo, 'codex');
   await writeFile(fakeCodex, `#!${process.execPath}
 const fs = require('node:fs');
@@ -120,16 +127,18 @@ console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 2, o
   function cli(...args) {
     const entry = fileURLToPath(new URL('../bin/crew.mjs', import.meta.url));
     return spawnSync(process.execPath, [entry, '--repo', repo, ...args], {
-      encoding: 'utf8', env: { ...process.env, PATH: `${repo}:${process.env.PATH}` },
+      encoding: 'utf8', env: { ...process.env, CREW_DATABASE_URL: url, PATH: `${repo}:${process.env.PATH}` }, cwd: repo,
     });
   }
-  const catalog = cli('run', 'start', 'catalog', '--project', config);
+  assert.equal(cli('project', 'register', '--file', config).status, 0);
+  assert.equal(cli('project', 'register', '--file', websiteConfig).status, 0);
+  const catalog = cli('run', 'start', 'catalog', '--project', 'pet-store', '--epic', 'epic-1');
   assert.equal(catalog.status, 0, catalog.stderr);
   const { run: staticRun } = JSON.parse(catalog.stdout);
   assert.deepEqual(staticRun.tasks.filter(task => task.attempts.length).map(task => task.packet.id), ['product-review', 'lead-review']);
   assert.ok(staticRun.tasks.slice(0, 2).every(task => task.attempts[0].evidenceStatus === 'recorded'));
 
-  const website = cli('run', 'start', 'website', '--project', websiteConfig);
+  const website = cli('run', 'start', 'website', '--project', 'pet-store', '--epic', 'epic-2');
   assert.equal(website.status, 0, website.stderr);
   assert.equal(JSON.parse(website.stdout).run.triage.status, 'pending');
   assert.ok(JSON.parse(website.stdout).run.tasks.every(task => !task.attempts.length));
@@ -145,14 +154,14 @@ console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 2, o
   assert.deepEqual(started.map(task => task.attempts[0].outcome), ['completed', 'execution-failed']);
   assert.equal(cli('run', 'triage', 'website', '--owner', 'SDM', '--note', 'Duplicate').status, 3);
   assert.equal(cli('task', 'dispatch', 'website', 'website-plan').status, 3);
-  const prepared = cli('run', 'start', 'prepared', '--project', config, '--no-dispatch');
+  const prepared = cli('run', 'start', 'prepared', '--project', 'pet-store', '--epic', 'epic-1', '--no-dispatch');
   assert.equal(prepared.status, 0, prepared.stderr);
   assert.ok(JSON.parse(prepared.stdout).run.tasks.every(task => !task.attempts.length));
 });
 
 test('concurrent kickoff calls reserve each initial assignment once', async t => {
-  const { control, snapshot } = await fixture(t);
-  const store = runStore(control.gitDir, 'kickoff');
+  const { snapshot } = await fixture(t);
+  const store = memoryRunStore();
   await store.create(newRun(snapshot, 'kickoff', config));
   const execute = async () => ({ outcome: 'execution-failed', receipt: {} });
   const start = () => dispatchInitial(store, undefined, undefined, execute);
@@ -179,10 +188,10 @@ test('a project cannot configure manual triage without a pinned brief or with an
 });
 
 test('the attention queue gates the handoff and the last resolution resumes it with evidence', async t => {
-  const { snapshot, control } = await fixture(t);
+  const { snapshot } = await fixture(t);
   snapshot.project.resourcePolicy = { rules: [{ action: 'create-database', mode: 'deny' }] };
   snapshot.project.tasks[0].budget.maxAttempts = 1;
-  const store = runStore(control.gitDir, 'resources');
+  const store = memoryRunStore();
   await store.create(newRun(snapshot, 'resources', config));
   const reply = { decisions: [], questions: [], blockers: [] };
   const requests = [
@@ -227,8 +236,8 @@ test('the attention queue gates the handoff and the last resolution resumes it w
 });
 
 test('an unevidenced resource request leaves a failed handoff and no provisionable item', async t => {
-  const { snapshot, control } = await fixture(t);
-  const store = runStore(control.gitDir, 'unevidenced');
+  const { snapshot } = await fixture(t);
+  const store = memoryRunStore();
   await store.create(newRun(snapshot, 'unevidenced', config));
   const attempt = await dispatch(store, 'product-review', undefined, undefined, async () => ({
     outcome: 'completed', response: { state: 'blocked', summary: 'Setup needed', decisions: [], questions: [],
@@ -241,8 +250,9 @@ test('an unevidenced resource request leaves a failed handoff and no provisionab
   assert.deepEqual(run.attentionTasks.map(task => task.id), ['product-review']);
 });
 
-test('only an exact rule and local binding can provision a requested resource', async t => {
-  const { snapshot, control, repo } = await fixture(t);
+test('only an exact rule and database binding can provision a requested resource', { skip: !postgres }, async t => {
+  const { snapshot, repo } = await fixture(t);
+  const { db } = await testDatabase(t);
   const action = 'create-table';
   const target = 'dev.catalog';
   snapshot.project.resourcePolicy = { rules: [{ action, mode: 'deny' }, { action, target, mode: 'auto' }] };
@@ -255,25 +265,24 @@ test('only an exact rule and local binding can provision a requested resource', 
       outputs: task.outputs.map(slot => ({ slot: slot.id, content: 'Fixture output.' })) } }
     : { outcome: 'completed', receipt: {}, response: { ...reply, state: 'blocked', summary: 'Table needed',
       resourceRequests: [{ action, target, reason: 'Store catalog rows.' }] } };
-  const missing = runStore(control.gitDir, 'missing');
+  const missing = runStore(db, 'missing');
   await missing.create(newRun(snapshot, 'missing', config));
-  await dispatch(missing, 'product-review', undefined, undefined, execute, control);
+  await dispatch(missing, 'product-review', undefined, undefined, execute, db);
   assert.equal((await missing.read()).resources[0].automatic.status, 'unavailable');
 
   const marker = join(repo, 'provisioned');
-  const path = join(control.gitDir, 'engineering-crew', 'provisioners.json');
-  const binding = { project: snapshot.project.id, action, target };
-  await writeFile(path, JSON.stringify([{ ...binding, command: [process.execPath, '-e', 'process.exit(1)'] }]), { mode: 0o600 });
-  const failed = runStore(control.gitDir, 'failed');
+  const project = snapshot.project.id;
+  await setProvisioner(db, project, action, target, [process.execPath, '-e', 'process.exit(1)']);
+  const failed = runStore(db, 'failed');
   await failed.create(newRun(snapshot, 'failed', config));
-  await dispatch(failed, 'product-review', undefined, undefined, execute, control);
+  await dispatch(failed, 'product-review', undefined, undefined, execute, db);
   assert.equal((await failed.read()).resources[0].automatic.status, 'failed');
 
-  await writeFile(path, JSON.stringify([{ ...binding, command: [process.execPath, '-e',
-    'require("node:fs").appendFileSync(process.argv[1], "provisioned")', marker] }]));
-  const auto = runStore(control.gitDir, 'auto');
+  await setProvisioner(db, project, action, target, [process.execPath, '-e',
+    'require("node:fs").appendFileSync(process.argv[1], "provisioned")', marker]);
+  const auto = runStore(db, 'auto');
   await auto.create(newRun(snapshot, 'auto', config));
-  const results = await dispatchInitial(auto, undefined, undefined, execute, control);
+  const results = await dispatchInitial(auto, undefined, undefined, execute, db);
   assert.deepEqual(results.map(attempt => attempt.result.state), ['completed', 'completed']);
   assert.equal(await readFile(marker, 'utf8'), 'provisioned');
   const provisioned = summarize(await auto.read());
@@ -283,8 +292,8 @@ test('only an exact rule and local binding can provision a requested resource', 
 });
 
 test('an incomplete result needs rework and acceptance requires evidence from the new attempt', async t => {
-  const { control, snapshot } = await fixture(t);
-  const store = runStore(control.gitDir, 'test-run');
+  const { snapshot } = await fixture(t);
+  const store = memoryRunStore();
   await store.create(newRun(snapshot, 'test-run', config));
   const receipt = { usage: { input: 50, output: 10, total: 60, source: 'test' } };
   const result = { state: 'completed', summary: 'Criteria prepared', decisions: [], questions: [], blockers: [], outputs: [] };
@@ -313,8 +322,8 @@ test('an incomplete result needs rework and acceptance requires evidence from th
 });
 
 test('the plan joins only accepted reviews and pins both upstream artifacts', async t => {
-  const { control, snapshot } = await fixture(t);
-  const store = runStore(control.gitDir, 'join');
+  const { snapshot } = await fixture(t);
+  const store = memoryRunStore();
   await store.create(newRun(snapshot, 'join', config));
   const receipt = { threadId: 'offline-test' };
   const complete = (slot, content) => ({ outcome: 'completed', receipt,
@@ -352,7 +361,7 @@ test('the website plan joins both design outputs and the roster retains each epi
   const { control, snapshot } = await fixture(t);
   const catalog = newRun(snapshot, 'catalog', config);
   const website = newRun(readProject(control, websiteConfig), 'website', websiteConfig);
-  const store = runStore(control.gitDir, website.id);
+  const store = memoryRunStore();
   await store.create(website);
   const roster = workspaceCatalog([website, catalog])[0].profiles;
   assert.equal(roster.find(profile => profile.id === 'visual-designer').configurationRun, 'website');
@@ -364,8 +373,8 @@ test('the website plan joins both design outputs and the roster retains each epi
   await assert.rejects(dispatch(store, 'website-plan'), /Waiting for accepted handoff: UX review/);
 });
 
-test('task usage counts retries and leaves unpriced attempts visible', async t => {
-  const { snapshot, control } = await fixture(t);
+test('workflow usage attributes retries and overlapping attempts, preserving missing measurements', async t => {
+  const { snapshot } = await fixture(t);
   const project = snapshot.project;
   const budget = project.tasks[0].budget;
   budget.costOwner = 'Budget reviewer';
@@ -377,25 +386,52 @@ test('task usage counts retries and leaves unpriced attempts visible', async t =
 
   const run = newRun(snapshot, 'budget', config);
   assert.equal(run.tasks[1].packet.budget.costOwner, 'SDM');
-  const store = runStore(control.gitDir, run.id);
+  const store = memoryRunStore();
   await store.create(run);
   const first = await dispatch(store, 'product-review', undefined, undefined, async () => ({
-    outcome: 'execution-failed', receipt: { usage: { input: 1_000, cached: 600, output: 200, total: 1_200 } },
+    outcome: 'execution-failed', receipt: {
+      startedAt: '2026-01-01T00:00:01Z', endedAt: '2026-01-01T00:00:04Z',
+      usage: { input: 1_000, cached: 600, output: 200, total: 1_200 },
+    },
   }));
   await decide(store, 'product-review', first.id, 'rework', 'Retry the review.');
   await dispatch(store, 'product-review', undefined, undefined, async () => ({ outcome: 'execution-failed', receipt: {} }));
-  const task = summarize(await store.read()).tasks[0];
-  assert.deepEqual(task.usage, { costOwner: 'Budget reviewer', costTargetUsd: 0.002, totalTokens: 1_200,
-    estimatedUsd: 0.0021, unpricedAttempts: 1, attemptsMissingUsage: 1, overCostTarget: true });
+  await dispatch(store, 'lead-review', undefined, undefined, async () => ({
+    outcome: 'completed', receipt: { usage: { input: 100, cached: 0, output: 0, total: 100 } },
+    response: { state: 'completed', summary: 'Reviewed scope', decisions: [], questions: [], blockers: [],
+      outputs: [{ slot: 'technical-review', content: 'Scope checked' }] },
+  }));
+  await store.update(record => {
+    const [product, lead] = record.tasks;
+    const time = (attempt, start, end) => Object.assign(attempt, {
+      startedAt: `2026-01-01T00:00:${start}Z`, endedAt: `2026-01-01T00:00:${end}Z`,
+    });
+    time(product.attempts[0], '00', '05');
+    time(product.attempts[1], '08', '09');
+    time(lead.attempts[0], '01', '06');
+    record.tasks[2].attempts.push({ id: randomUUID(), outcome: 'running', startedAt: '2026-01-01T00:00:10Z' });
+  });
+  const summary = summarize(await store.read());
+  const task = summary.tasks[0];
+  assert.deepEqual(task.usage, { costOwner: 'Budget reviewer', costTargetUsd: 0.002, attempts: 2, runningAttempts: 0,
+    totalTokens: 1_200, estimatedUsd: 0.0021, durationMs: 6_000, unpricedAttempts: 1, attemptsMissingUsage: 1,
+    attemptsMissingDuration: 0, overCostTarget: true });
   assert.equal(task.attempts[1].estimatedUsd, null);
-  assert.equal(task.attempts[0].estimatedUsd, 0.0021);
+  assert.equal(task.attempts[0].codexDurationMs, 3_000);
+  assert.equal(summary.usage.totalTokens, 1_300);
+  assert.equal(summary.usage.durationMs, 11_000);
+  assert.equal(summary.usage.attemptWindowMs, 9_000);
+  assert.equal(summary.usage.runningAttempts, 1);
+  assert.equal(summary.usage.attemptsMissingUsage, 1);
+  assert.equal(summary.usage.byProfile.find(profile => profile.profileId === 'lead-engineer').totalTokens, 100);
+  assert.equal(summary.quality.reworkDecisions, 1);
 });
 
 test('implementation blockers gate delivery and a fix loop replaces only candidate-dependent handoffs', async t => {
   const { control, repo } = await fixture(t);
   const snapshot = readProject(control, websiteConfig);
   const run = newRun(snapshot, 'fix-test', websiteConfig);
-  const store = runStore(control.gitDir, run.id);
+  const store = memoryRunStore();
   await store.create(run);
   const buildId = run.orchestration.buildTask;
   const triage = await triageRun(store, 'Tech Lead', 'Assign prototype implementation to the frontend specialist.',
@@ -415,7 +451,8 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
   const file = run.tasks.find(task => task.packet.id === buildId).packet.outputs[0].path;
   async function seedBuild(content) {
     const id = randomUUID();
-    const candidate = createCandidate(control, run.sourceCommit, `refs/crew/test/${id}`, [{ path: file, content }]);
+    const execution = run.tasks.find(task => task.packet.id === buildId).packet.execution;
+    const { candidate, files, diff } = buildCandidate(run.sourceCommit, run.sourceFiles, execution, [{ path: file, content }]);
     await store.update(record => {
       const task = record.tasks.find(task => task.packet.id === buildId);
       const add = (slot, content) => {
@@ -425,9 +462,12 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
       };
       task.attempts.push({
         id, number: task.attempts.length + 1, packetRevision: task.packet.revision, outcome: 'completed', startedAt: new Date().toISOString(),
-        receiptId: add('receipt', '{}'), candidate, result: { state: 'completed', artifacts: { website: add('website', content) } },
-        runnerArtifacts: { candidate: add('candidate', JSON.stringify(candidate)), 'check-receipt': add('check-receipt', '{}'),
-          'candidate-diff': add('candidate-diff', candidateDiff(control, candidate)) },
+        receiptId: add('receipt', '{}'), candidate, candidateFiles: files, result: { state: 'completed', artifacts: { website: add('website', content) } },
+        runnerArtifacts: { candidate: add('candidate', JSON.stringify(candidate)), 'check-receipt': add('check-receipt', JSON.stringify({
+          kind: 'author-tests', testedCommit: candidate.commit, platform: 'test-fixture',
+          checks: [{ id: 'author-tests', passed: true }], passed: true,
+        })),
+          'candidate-diff': add('candidate-diff', diff) },
       });
     });
     await decide(store, buildId, id, 'accepted', 'Seeded candidate');
@@ -450,12 +490,18 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
   const deferred = await review(visual, [backlog]);
   await decide(store, visual, deferred.id, 'accepted', 'Polish can wait');
   for (const task of [lead, security]) await review(task, []);
+  const reviewed = await store.read();
+  assert.deepEqual(summarize(reviewed).quality.checks, { passed: 1, total: 1, missingReceipts: 0 });
+  const checkReceipt = currentAttempt(reviewed.tasks.find(task => task.packet.id === buildId)).runnerArtifacts['check-receipt'];
+  reviewed.artifacts = reviewed.artifacts.filter(record => record.id !== checkReceipt);
+  assert.deepEqual(summarize(reviewed).quality.checks, { passed: 0, total: 0, missingReceipts: 1 });
   await assert.rejects(dispatch(store, 'website-delivery'), /Waiting for accepted handoff/);
   await assert.rejects(requestFix(store, randomUUID(), 'Stale click'), /build candidate changed/);
   const loop = await requestFix(store, first.id, 'Fix the filter');
   assert.equal(loop.number, 1);
   let summary = summarize(await store.read());
   assert.equal(summary.fix.used, 1);
+  assert.deepEqual(summary.quality.checks, { passed: 0, total: 0, missingReceipts: 0 });
   assert.equal(summary.backlog[0].title, backlog.title);
   assert.equal(currentAttempt(summary.tasks.find(task => task.packet.id === ux)), undefined);
   assert.equal(summary.tasks.find(task => task.packet.id === visual).attempts[0].decision.disposition, 'accepted');
@@ -467,7 +513,7 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
     assert.equal(job.task.fixLoop.previousCandidate, first.candidate.commit);
     assert.ok(loop.artifacts.every(record => job.inputs.some(input => input.id === record.id && input.digest === record.digest)));
     return completed('website', source);
-  }, control);
+  });
   assert.match(repeated.error, /must change the reviewed candidate source/);
   const second = await seedBuild('<main>Replacement candidate</main>');
   assert.notEqual(second.candidate.commit, first.candidate.commit);
@@ -486,4 +532,78 @@ test('implementation blockers gate delivery and a fix loop replaces only candida
   await assert.rejects(requestFix(store, second.id, 'Try again'), /limit reached/);
   summary = summarize(await store.read());
   assert.equal(summary.backlog[0].title, backlog.title);
+});
+
+test('Postgres versions pin the configuration and files across checkouts and concurrent writers', { skip: !postgres }, async t => {
+  const { repo, control } = await fixture(t);
+  const { db } = await testDatabase(t);
+  const brief = join(repo, 'uncommitted-brief.md');
+  await writeFile(brief, 'Private version-one brief');
+  const capture = () => captureConfiguration(control, join(repo, config), 'HEAD', new Map([['brief', brief]]));
+  const first = capture();
+  assert.deepEqual(await Promise.all([registerProject(db, first), registerProject(db, first)]), [1, 1]);
+  await writeFile(brief, 'Private version-two brief');
+  assert.equal(await registerProject(db, capture()), 2);
+
+  const configured = await loadProject(db, 'pet-store', 'epic-1', 1);
+  assert.equal((await loadProject(db, 'pet-store', 'epic-1')).version, 2);
+  const run = newRun(configured, 'pinned-run');
+  const store = runStore(db, run.id);
+  await store.create(run);
+  await assert.rejects(store.create(run), /already exists/);
+  await rm(repo, { recursive: true, force: true });
+  const persisted = await store.read();
+  assert.equal(findArtifact(persisted, 'input-brief').content, 'Private version-one brief');
+  assert.equal(findArtifact(persisted, 'project-config').provenance.version, 1);
+  const execute = async () => ({ outcome: 'execution-failed', receipt: {} });
+  const kickoffs = await Promise.all([dispatchInitial(store, undefined, undefined, execute),
+    dispatchInitial(store, undefined, undefined, execute)]);
+  assert.deepEqual(kickoffs.map(result => result.length).sort(), [0, 2]);
+  await assert.rejects(store.update(record => { record.project.name = 'Uncommitted'; throw new Error('Rollback'); }), /Rollback/);
+  assert.equal((await store.read()).project.name, run.project.name);
+
+  const { execution, outputs } = run.tasks.find(task => task.packet.execution?.kind === 'build').packet;
+  const source = outputs.find(slot => slot.kind === 'source');
+  const changes = [{ path: source.path, content: 'export const candidate = true;\n' }];
+  const candidate = buildCandidate(run.sourceCommit, persisted.sourceFiles, execution, changes);
+  assert.match(candidate.diff, /\+export const candidate = true/);
+  assert.equal(candidate.files[source.path].content, changes[0].content);
+  assert.deepEqual(candidate, buildCandidate(run.sourceCommit, persisted.sourceFiles, execution, changes));
+
+  const tamperedFiles = structuredClone(candidate.files);
+  tamperedFiles[source.path].content += '// unexpected change';
+  const { packet } = run.tasks.find(task => task.packet.execution?.kind === 'verify');
+  const checkSlot = packet.outputs.find(slot => slot.kind === 'check-cases');
+  const cases = packet.criteria.flatMap(criterion =>
+    Array.from({ length: packet.execution.minCases[criterion] }, (_, index) => {
+      const id = `${criterion.toLowerCase()}-${index}`;
+      return { id, criterion, args: [id], expected: { exitCode: 0, stdout: { text: '' }, stderr: '' } };
+    }));
+  await assert.rejects(executeEvidence({ task: packet, attempt: {}, candidate: candidate.candidate, candidateFiles: tamperedFiles },
+    { outputs: [{ slot: checkSlot.id, content: JSON.stringify(cases) }] }), /Captured files do not match the accepted candidate/);
+});
+
+test('legacy import is repeatable and preserves old run state without writing local records', { skip: !postgres }, async t => {
+  const { control, snapshot, git } = await fixture(t);
+  const { db } = await testDatabase(t);
+  const run = newRun(snapshot, 'imported', config);
+  delete run.sourceFiles;
+  const { packet, attempts } = run.tasks.find(task => task.packet.execution?.kind === 'build');
+  const ref = `refs/crew/candidates/${run.id}/fixture`;
+  git('update-ref', ref, run.sourceCommit);
+  attempts.push({ id: randomUUID(), candidate: { base: run.sourceCommit, commit: run.sourceCommit, ref } });
+  const directory = join(control.gitDir, 'engineering-crew', 'runs');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, `${run.id}.json`);
+  const raw = JSON.stringify(run);
+  await writeFile(path, raw);
+  assert.deepEqual(await importLocal(db, control), { imported: 1, skipped: 0 });
+  const store = runStore(db, run.id);
+  const imported = await store.read();
+  assert.ok(imported.sourceFiles[packet.execution.entry].content);
+  assert.ok(imported.tasks.find(task => task.packet.id === packet.id).attempts[0].candidateFiles[packet.execution.entry].content);
+  await store.update(record => { record.project.name = 'Updated in Postgres'; });
+  assert.deepEqual(await importLocal(db, control), { imported: 0, skipped: 1 });
+  assert.equal((await store.read()).project.name, 'Updated in Postgres');
+  assert.equal(await readFile(path, 'utf8'), raw);
 });

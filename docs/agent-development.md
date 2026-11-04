@@ -7,6 +7,11 @@ Engineer pilot](security-engineer-pilot.md), [SDM pilot](sdm-pilot.md), and
 [Lead Engineer pilot](lead-engineer-pilot.md) show how this works for reviews,
 delivery decisions, and technical plan approval.
 
+Keep static prompts and skills in Git. Place new role-specific skills under
+`skills/<agent-id>/` and reusable ones under `skills/common/`. Each agent's
+profile lists the skills it uses. Register a new project configuration
+version to activate a revised profile or skill for future runs.
+
 1. **Define the job.** Name the decision the role owns, the packet it gets,
    the output the next role needs, and the boundary of its authority. For
    example, a reviewer identifies release blockers and supplies evidence;

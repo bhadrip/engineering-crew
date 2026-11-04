@@ -135,23 +135,23 @@ export function projectPage(project, view, { query = '', status: filter, configu
     return layout(`${project.name} · Agents`, `${projectHeader(project, 'agents')}<main>
 <h1>${escape(project.crewName)}</h1>
 <section class="record-section"><h2>Orchestration settings</h2>
-<p class="muted">Edit the project configuration in Git and start a new run to apply changes.</p>
+<p class="muted">Register a new configuration version in Postgres and start a run to apply it.</p>
 <ul class="index-list">${configurations.map(config => {
     const { epic, project: settings } = config;
     const policy = settings?.orchestration;
     const latest = epic.runs[0];
     const title = taskId => settings.tasks.find(task => task.id === taskId)?.title ?? taskId;
     return `<li><a href="${epicHref(project, epic)}">${escape(epicName(epic))}</a>
-${config.error ? `<p>${escape(config.error)}</p>` : `<p><code>${escape(config.path)}</code> · ${escape(config.sourceCommit.slice(0, 12))}</p>
-${policy ? `<p>${escape(title(policy.buildTask))} → ${policy.reviewTasks.map(id => escape(title(id))).join(' + ')}</p>
+${config.error ? `<p>${escape(config.error)}</p>` : `<p>Version ${escape(config.version)} · Git baseline <code>${escape(config.sourceCommit.slice(0, 12))}</code></p>
+${config.error ? '' : policy ? `<p>${escape(title(policy.buildTask))} → ${policy.reviewTasks.map(id => escape(title(id))).join(' + ')}</p>
 <p>${policy.maxFixLoops} maximum fix ${policy.maxFixLoops === 1 ? 'loop' : 'loops'} · Decision owner ${escape(policy.decisionOwner)}</p>`
     : '<p>No implementation reviews configured.</p>'}`}
-${settings?.resourcePolicy?.rules.length ? `<p><strong>Resource rules</strong></p><ul>${settings.resourcePolicy.rules.map(rule =>
+${config.error ? '' : settings?.resourcePolicy?.rules.length ? `<p><strong>Resource rules</strong></p><ul>${settings.resourcePolicy.rules.map(rule =>
       `<li>${escape(rule.action)} · ${escape(rule.target ?? 'Any target')} · ${escape(resourceModes[rule.mode])}</li>`).join('')}</ul>`
       : '<p>Resource setup defaults to manual confirmation.</p>'}
 <p><a href="${artifactHref(latest.id, 'project-config')}?view=agents">View the latest run’s pinned configuration</a></p></li>`;
   }).join('')}</ul></section>
-<section class="record-section"><h2>Configured agents</h2>${agents}</section></main>`);
+<section class="record-section"><h2>Agents in latest runs</h2>${agents}</section></main>`);
   }
   const selected = Object.hasOwn(stateLabels, filter) ? filter : 'all';
   const entries = project.epics.filter(epic => {
@@ -325,7 +325,7 @@ ${roster}
 ${triage.owners.map(owner => `<option value="${escape(owner)}">${escape(owner)}</option>`).join('')}</select>
 <label for="triage-note">Assignment reason</label><textarea name="note" id="triage-note" rows="2" required maxlength="2000"></textarea>
 <div class="buttons"><button type="submit">Confirm and start</button></div></div></form>`
-    : `<p>${triage.mode === 'static' ? 'Assigned from the Git configuration' : `Confirmed by <strong>${escape(triage.owner)}</strong>`}
+    : `<p>${triage.mode === 'static' ? 'Assigned from the pinned configuration' : `Confirmed by <strong>${escape(triage.owner)}</strong>`}
 · ${timestamp(triage.recordedAt)}</p>${triage.note ? `<p>${escape(triage.note)}</p>` : ''}
 ${roster}<p class="triage-links"><a href="${epicViewHref(run, 'workflow')}">Open workflow ${arrow}</a>
 <a href="${artifactHref(run.id, triage.artifactId)}?view=triage">View assignment record ${arrow}</a></p>`}</section>`;
@@ -344,6 +344,7 @@ function overviewPanel(run, epic) {
 <a href="${epicViewHref(run, 'activity')}">All activity ${arrow}</a></div>${eventList(activityEvents(run).filter(event => event.key).slice(0, 5), true)}</section>
 <aside class="run-summary" aria-label="Run details"><h2>Run details</h2><dl>
 <div><dt>Handoffs</dt><dd><a href="${epicViewHref(run, 'workflow')}">${run.handoffs.accepted}/${run.handoffs.total} accepted</a></dd></div>
+<div><dt>Workflow usage</dt><dd><a href="${epicViewHref(run, 'usage')}">${run.usage.totalTokens === null ? 'View usage' : `${tokenTotal(run.usage)} tokens`}</a></dd></div>
 ${qaTask ? `<div><dt>Independent QA</dt><dd>${qa ? `<a href="${epicViewHref(run, 'checks')}">${qa.checks.filter(check => check.passed).length}/${qa.checks.length} passed</a>` : 'No receipt yet'}</dd></div>` : ''}
 ${candidate ? `<div><dt>Candidate</dt><dd>${diff ? `<a href="${artifactHref(run.id, diff)}?view=epic"><code>${escape(candidate.commit.slice(0, 7))}</code></a>` : `<code>${escape(candidate.commit.slice(0, 7))}</code>`}</dd></div>` : ''}
 <div><dt>Run</dt><dd><code>${escape(run.id)}</code></dd></div></dl>
@@ -352,23 +353,102 @@ ${brief ? `<a class="brief-link" href="${artifactHref(run.id, brief.id)}?view=ep
 
 const number = value => value.toLocaleString('en-US');
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 6 });
+const count = (value, noun) => `${number(value)} ${noun}${value === 1 ? '' : 's'}`;
 
-function costSummary(usage) {
-  const tokens = usage.totalTokens === null ? 'No token usage reported' : `${number(usage.totalTokens)} tokens reported`;
-  const cost = usage.estimatedUsd === null ? 'No cost estimate'
-    : `${dollars.format(usage.estimatedUsd)} estimated${usage.unpricedAttempts ? ' so far' : ''}`;
+function duration(ms) {
+  if (ms == null) return '—';
+  if (ms < 1_000) return `${ms} ms`;
+  const seconds = Math.floor(ms / 1_000);
+  if (seconds < 60) return `${(ms / 1_000).toFixed(1)} s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours}h ${minutes % 60}m` : `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+const partial = missing => missing ? ' (partial)' : '';
+const tokenTotal = usage => usage.totalTokens === null ? '—' : `${number(usage.totalTokens)}${partial(usage.attemptsMissingUsage)}`;
+const costTotal = usage => usage.estimatedUsd === null ? '—' : `${dollars.format(usage.estimatedUsd)}${partial(usage.unpricedAttempts)}`;
+const timeTotal = usage => usage.durationMs === null ? '—' : `${duration(usage.durationMs)}${partial(usage.attemptsMissingDuration)}`;
+const taskUsageHref = (run, taskId) => epicViewHref(run, 'usage', `#usage-${encodeURIComponent(taskId)}`);
+
+function usageSummary(usage) {
+  const tokens = usage.totalTokens === null ? 'No token usage reported' : `${tokenTotal(usage)} tokens`;
+  const cost = usage.estimatedUsd === null ? 'No cost estimate' : `${costTotal(usage)} estimated`;
   return [tokens, cost, usage.costTargetUsd === null ? '' : `${dollars.format(usage.costTargetUsd)} target`,
-    usage.overCostTarget ? 'Above cost target' : ''].filter(Boolean).join(' · ');
+    usage.overCostTarget ? 'Above cost target' : '', usage.durationMs === null ? '' : `${timeTotal(usage)} in attempts`].filter(Boolean).join(' · ');
+}
+
+function usageGaps(usage) {
+  const gaps = [[usage.attemptsMissingUsage, 'without token usage'], [usage.unpricedAttempts, 'without a cost estimate'],
+    [usage.attemptsMissingDuration, 'without timing'], [usage.runningAttempts, 'still running']];
+  return gaps.filter(([total]) => total).map(([total, label]) => `${count(total, 'attempt')} ${label}`).join(' · ');
+}
+
+function attemptMetrics(attempt) {
+  const { usage, estimatedUsd, durationMs, codexDurationMs } = attempt;
+  const tokenParts = [['input', 'input'], ['output', 'output'], ['cached', 'cached input'], ['reasoning', 'reasoning output']]
+    .filter(([key]) => Number.isSafeInteger(usage?.[key]) && usage[key] >= 0)
+    .map(([key, label]) => `${number(usage[key])} ${label}`).join(' / ');
+  const tokens = Number.isSafeInteger(usage?.total) && usage.total >= 0
+    ? `${number(usage.total)} tokens${tokenParts ? ` (${tokenParts})` : ''}` : 'Token usage unreported';
+  return `<p class="muted">${attempt.outcome === 'running' ? 'Usage and timing pending' : [
+    tokens, attempt.overTokenTarget ? 'Above token target' : '',
+    estimatedUsd === null ? 'No cost estimate' : `${dollars.format(estimatedUsd)} estimated`,
+    durationMs === null ? 'Duration unrecorded' : `${duration(durationMs)} total`,
+    codexDurationMs === null ? '' : `${duration(codexDurationMs)} in Codex`,
+  ].filter(Boolean).join(' · ')}</p><p class="muted">${attempt.runtime?.model
+    ? `Model · ${escape(attempt.runtime.model)}` : 'Model unrecorded'}</p>`;
+}
+
+function attemptQuality(run, packet, attempt) {
+  const verification = attempt.verification;
+  const checks = verification ? `<a href="${artifactHref(run.id, attempt.runnerArtifacts['check-receipt'], packet.id)}">${verification.checks.filter(check => check.passed).length}/${verification.checks.length} Docker checks passed</a>`
+    : packet.execution && (attempt.result?.state === 'completed' || attempt.outcome === 'check-failed') ? 'No check receipt' : '';
+  const findings = attempt.reviewFindings;
+  return [checks, findings ? `${count(findings.filter(finding => finding.severity === 'blocker').length, 'blocker')} · ${findings.filter(finding => finding.severity === 'backlog').length} deferred` : ''].filter(Boolean).join(' · ');
 }
 
 function usagePanel(run) {
-  return `<section class="record-section"><div class="section-title"><h2>Task usage</h2></div>
-<p class="muted">Usage includes every attempt. Cost estimates require configured token rates.</p>
-<ul class="index-list">${run.tasks.map(({ packet, usage }) => `<li>
-<a href="${taskHref(run.id, packet.id)}">${escape(packet.title)}</a>
-<p>Cost owner · ${escape(usage.costOwner ?? 'Unrecorded')}</p>
-<p>${costSummary(usage)}</p>
-${usage.attemptsMissingUsage ? `<p>Missing token usage from ${usage.attemptsMissingUsage} ${usage.attemptsMissingUsage === 1 ? 'attempt' : 'attempts'}.</p>` : ''}</li>`).join('')}</ul></section>`;
+  const { usage, quality, handoffs } = run;
+  const checks = quality.checks.total ? `${quality.checks.passed}/${quality.checks.total} recorded Docker checks passed` : 'No Docker checks recorded for current attempts';
+  const profiles = [...usage.byProfile].sort((a, b) => (b.totalTokens ?? -1) - (a.totalTokens ?? -1));
+  return `<div class="epic-sections"><section aria-labelledby="usage-heading">
+<div class="section-title"><h2 id="usage-heading">Workflow usage</h2><p>Run · <code>${escape(run.id)}</code> · ${count(usage.attempts, 'attempt')}</p></div>
+<dl class="usage-metrics">
+<div><dt>Reported tokens</dt><dd>${tokenTotal(usage)}</dd></div>
+<div><dt>Estimated cost</dt><dd>${costTotal(usage)}</dd></div>
+<div><dt>Total attempt time</dt><dd>${timeTotal(usage)}</dd></div>
+<div><dt>Attempt window</dt><dd>${duration(usage.attemptWindowMs)}${usage.attemptWindowMs === null ? '' : partial(usage.attemptsMissingDuration)}</dd></div>
+</dl>
+<p class="muted">Totals include finished retries and previous candidates. Total attempt time adds durations even when attempts overlap. The attempt window spans the first recorded start to the last recorded finish of timed attempts. Cost estimates use configured token rates.</p>
+${usageGaps(usage) ? `<p class="muted">${usageGaps(usage)}</p>` : ''}
+${usage.attempts ? '' : '<p class="empty-state">No attempts recorded for this run yet.</p>'}</section>
+<section aria-labelledby="quality-heading"><h2 id="quality-heading">Quality signals</h2>
+<p><a href="${epicViewHref(run, 'workflow')}">${handoffs.accepted}/${handoffs.total} handoffs accepted</a> · ${count(quality.reworkDecisions, 'rework decision')}${run.fix ? ` · <a href="${epicViewHref(run, 'reviews')}">${count(run.fix.used, 'fix loop')}</a>` : ''}</p>
+${run.tasks.some(task => task.packet.execution) ? `<p><a href="${epicViewHref(run, 'checks')}">${checks}</a>${quality.checks.missingReceipts
+    ? ` · ${count(quality.checks.missingReceipts, 'current attempt')} without a check receipt` : ''}</p>` : ''}</section>
+<section aria-labelledby="agent-usage-heading"><h2 id="agent-usage-heading">Usage by agent</h2>
+<table class="usage-table" aria-labelledby="agent-usage-heading"><thead><tr><th scope="col">Agent</th><th scope="col">Tokens</th><th scope="col">Est. cost</th><th scope="col">Attempt time</th></tr></thead>
+<tbody>${profiles.map(profile => `<tr><th scope="row">${escape(profile.name)}<small>${count(profile.attempts, 'attempt')}${profile.runningAttempts ? ` · ${profile.runningAttempts} running` : ''}</small></th>
+<td>${tokenTotal(profile)}</td><td>${costTotal(profile)}</td><td>${timeTotal(profile)}</td></tr>`).join('')}</tbody></table></section>
+<section aria-labelledby="task-usage-heading"><h2 id="task-usage-heading">Usage by task</h2>
+<ul class="index-list">${run.tasks.map(task => {
+    const { packet, usage, attempts } = task;
+    const profile = run.profiles.find(value => value.id === packet.profileId);
+    const [label, , tone] = taskStatus(run, task);
+    return `<li id="usage-${escape(packet.id)}"><div class="section-title">
+<h3><a href="${taskHref(run.id, packet.id)}">${escape(packet.title)}</a></h3>${stateBadge(label, tone)}</div>
+<p>${escape(profile.name)} · Cost owner ${escape(usage.costOwner ?? 'Unrecorded')}</p>
+<p>${usageSummary(usage)}</p>${usageGaps(usage) ? `<p>${usageGaps(usage)}</p>` : ''}
+${attempts.length ? `<details class="usage-attempts"><summary>${count(attempts.length, 'attempt')}</summary>
+<ol class="history">${attempts.map((attempt, index) => {
+      const quality = attemptQuality(run, packet, attempt);
+      return `<li><strong><a href="${taskHref(run.id, packet.id)}#attempt-${attempt.number}">Attempt ${attempt.number}</a></strong>
+· ${escape(status(attempt)[0])}${index < (task.activeFrom ?? 0) ? ' · Superseded' : ''}
+${attemptMetrics(attempt)}${quality ? `<p>${quality}</p>` : ''}</li>`;
+    }).join('')}</ol></details>` : ''}</li>`;
+  }).join('')}</ul></section></div>`;
 }
 
 function findingsList(findings) {
@@ -538,7 +618,8 @@ function pipelineDetails(run, task, taskById) {
   return `<section id="handoff-details" class="pipeline-details" aria-labelledby="handoff-details-title" tabindex="-1">
 <div class="section-title"><h3 id="handoff-details-title">${escape(packet.title)}</h3>${stateBadge(verdict, tone)}</div>
 <p class="muted">${escape(profile.name)} · Decision owner ${escape(packet.acceptedBy)}</p>
-<p class="muted">Cost owner · ${escape(task.usage.costOwner ?? 'Unrecorded')} · <a href="${epicViewHref(run, 'usage')}">Task usage</a></p>
+<p class="muted">Cost owner · ${escape(task.usage.costOwner ?? 'Unrecorded')} · <a href="${taskUsageHref(run, packet.id)}">Task usage</a></p>
+${attempts.length ? `<p class="muted">${usageSummary(task.usage)}</p>` : ''}
 <p>${escape(latest?.result?.summary ?? description)}</p>
 ${latest?.resourceIds?.length ? `<p><a href="${epicViewHref(run, 'attention')}">View resource requests ${arrow}</a></p>` : ''}
 ${packet.prerequisites.length ? `<p class="pipeline-deps"><strong>Depends on</strong> ${packet.prerequisites.map(id =>
@@ -629,36 +710,41 @@ ${run.orchestration?.reviewTasks.includes(packet.id) ? `<p><a href="${epicViewHr
 <a href="${taskHref(run.id, item.packet.id)}"${item === task ? ' aria-current="page"' : ''}>${escape(item.packet.title)}<span>${escape(taskStatus(run, item)[0])}</span></a></li>`).join('')}</ul>
 <dl class="meta"><div><dt>${run.triagePending ? 'Proposed assignee' : 'Assigned to'}</dt><dd><a href="${artifactHref(run.id, profile.instructionId, packet.id)}">${escape(profile.name)}</a></dd></div>
 <div><dt>Decision owner</dt><dd>${escape(packet.acceptedBy)}</dd></div><div><dt>Cost owner</dt><dd>${escape(task.usage.costOwner ?? 'Unrecorded')}</dd></div>
-<div><dt>Git commit</dt><dd><code title="${escape(run.sourceCommit)}">${escape(run.sourceCommit.slice(0, 12))}</code></dd></div>
+${run.project.configurationVersion ? `<div><dt>Configuration version</dt><dd>${escape(run.project.configurationVersion)}</dd></div>` : ''}
+<div><dt>Git baseline</dt><dd><code title="${escape(run.sourceCommit)}">${escape(run.sourceCommit.slice(0, 12))}</code></dd></div>
 <div><dt>Run</dt><dd><code>${escape(run.id)}</code></dd></div></dl></aside>
 <div class="records"><div class="grid"><section><h2>Inputs</h2>${links(run, packet.id, inputs)}</section>
 <section><h2>Outputs</h2>${outputs.length ? links(run, packet.id, outputs) : `<p class="muted">Expected output: ${escape(expected)}.</p>`}</section></div>
 <section><h2>Evidence</h2>${evidenceLinks(run, packet.id, evidence, latest)}
 ${latest?.result ? `<p>${escape(latest.result.summary)}</p>${[['Questions', latest.result.questions], ['Agent decisions', latest.result.decisions], ['Blockers', latest.result.blockers]].filter(([, values]) => values.length).map(([label, values]) => `<h3>${label}</h3><ul>${values.map(value => `<li>${escape(value)}</li>`).join('')}</ul>`).join('')}` : ''}</section>
-<section><h2>Usage</h2><p>${costSummary(task.usage)}</p><p class="muted">${number(packet.budget.targetTotalTokens)} token target per attempt</p></section>
+<section><div class="section-title"><h2>Usage</h2><a href="${taskUsageHref(run, packet.id)}">Workflow usage ${arrow}</a></div>
+<p>${usageSummary(task.usage)}</p><p class="muted">${number(packet.budget.targetTotalTokens)} token target per attempt</p></section>
 ${attempts.length ? `<section><h2>Attempt history</h2><ol class="history">${attempts.map(attempt => `<li id="attempt-${attempt.number}">
 <strong>Attempt ${attempt.number}</strong> · ${escape(status(attempt)[0])}${attempt.packetId ? ` · <a href="${artifactHref(run.id, attempt.packetId, packet.id)}">Packet revision ${attempt.packetRevision}</a>` : ''}${attempt.receiptId ? ` · <a href="${artifactHref(run.id, attempt.receiptId, packet.id)}">Receipt</a>` : ''}
 ${attempt.resumedFrom ? ` · Resumed after <a href="${epicViewHref(run, 'attention')}">resource setup</a>` : ''}
 ${Object.values(attempt.result?.artifacts ?? {}).map(id => ` · <a href="${artifactHref(run.id, id, packet.id)}">Output</a>`).join('')}
 ${traceLink(attempt) ? ` · ${traceLink(attempt)}` : ''}
-${attempt.usage ? `<p class="muted">${number(attempt.usage.total)} tokens reported${attempt.overTokenTarget ? ' · above token target' : ''}${attempt.estimatedUsd === null ? '' : ` · ${dollars.format(attempt.estimatedUsd)} estimated`}</p>` : ''}
+${attemptMetrics(attempt)}
+${attemptQuality(run, packet, attempt) ? `<p>${attemptQuality(run, packet, attempt)}</p>` : ''}
 ${attempt.decision ? `<p class="muted">${escape(attempt.decision.owner)} recorded ${escape(attempt.decision.disposition)}. ${escape(attempt.decision.note)}</p>` : ''}</li>`).join('')}</ol></section>` : ''}
 </div></div></main>`, latest?.outcome === 'running');
 }
 
 export function artifactPage(artifact, run, fromTask, view) {
-  const provenance = artifact.provenance.source === 'git' ? `Git · ${artifact.provenance.path} · ${artifact.provenance.sourceCommit}`
+  const provenance = artifact.provenance.source === 'postgres'
+    ? `Postgres · Configuration version ${artifact.provenance.version} · Git baseline ${artifact.provenance.sourceCommit}`
+    : artifact.provenance.source === 'git' ? `Git · ${artifact.provenance.path} · ${artifact.provenance.sourceCommit}`
     : artifact.provenance.source === 'triage' ? `Triage · Git baseline ${artifact.provenance.sourceCommit}`
       : artifact.provenance.source === 'resource-resolution'
         ? `Resource resolution · Git baseline ${artifact.provenance.sourceCommit} · Attempt ${artifact.provenance.attemptId}`
         : `${artifact.provenance.source} · ${artifact.provenance.attemptId}`;
   let back = [projectHref(run.project), 'Back to project'];
   if (fromTask && view === 'pipeline') back = [pipelineHref(run, fromTask), 'Back to the pipeline step'];
-  else if (view === 'attention') back = [epicViewHref(run, 'attention'), 'Back to Needs attention'];
   else if (fromTask) back = [taskHref(run.id, fromTask), 'Back to the handoff'];
   else if (view === 'agents') back = [`${projectHref(run.project)}/agents`, 'Back to agents'];
   else if (view === 'checks') back = [epicViewHref(run, 'checks'), 'Back to checks'];
   else if (view === 'triage') back = [epicViewHref(run, 'triage'), 'Back to triage'];
+  else if (view === 'attention') back = [epicViewHref(run, 'attention'), 'Back to Needs attention'];
   else if (view === 'epic') back = [`${epicHref(run.project, run.epic)}?run=${encodeURIComponent(run.id)}`, 'Back to the epic'];
   return layout(artifact.title, `${projectHeader(run.project)}<main><nav class="breadcrumbs" aria-label="Location"><a href="${back[0]}">← ${back[1]}</a></nav>
 <p class="eyebrow">Linked artifact</p><h1>${escape(artifact.title)}</h1><p class="muted provenance">${escape(provenance)}</p>
