@@ -28,6 +28,22 @@ Pet Store pilot runs within a single Git checkout.
    candidate diff, check results, and decisions so the project owner can
    review the outcome.
 
+### Workflow DAG
+
+Each arrow marks a dependency. In this example, Product, UX, and Visual Design
+can work in parallel. The SDM uses their accepted outputs to plan the build.
+Independent QA and specialist reviews feed the delivery decision.
+
+![Illustrative catalog delivery DAG. Product, UX, and Visual Design feed the SDM plan. The engineer builds the candidate, independent QA and design and security reviewers check it, and the SDM reviews their evidence.](docs/engineering-crew-workflow-dag.png)
+
+### Handoff contracts
+
+A task packet names the role, pins its inputs, and declares the expected output.
+When the SDM accepts the UX spec, the planning task can use that exact artifact
+and trace it to the attempt that produced it.
+
+![Example handoff contract. The UX task packet pins the brief and criteria and expects a UX spec. Codex returns the spec. Only the accepted output goes to the SDM planning task, which records the producer, attempt, and digest.](docs/engineering-crew-handoff-contracts.png)
+
 ## Configure, run, and trace
 
 ![Git defines roles, handoffs, and checks. The browser UI dispatches tasks and records handoff decisions. Optional CLI exports link selected attempts to verified traces in Langfuse.](docs/engineering-crew-controls.png)
