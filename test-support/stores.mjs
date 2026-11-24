@@ -30,9 +30,9 @@ export function memoryRunStore() {
     read: async () => clone(record),
     create: async value => { record = clone(value); },
     update: callback => {
-      const update = pending.then(() => {
+      const update = pending.then(async () => {
         const next = clone(record);
-        const result = callback(next);
+        const result = await callback(next);
         record = clone(next);
         return result;
       });

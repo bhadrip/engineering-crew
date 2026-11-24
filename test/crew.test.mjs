@@ -117,6 +117,8 @@ test('the CLI starts the initial assignments on static intake or manual confirma
   await writeFile(fakeCodex, `#!${process.execPath}
 const fs = require('node:fs');
 const { task } = JSON.parse(fs.readFileSync(0, 'utf8').split('\\n').at(-1));
+const expectedModel = { 'product-review': 'test-model', 'lead-review': 'test-planning-model' }[task.id];
+if (expectedModel && !process.argv.includes('--model=' + expectedModel)) process.exit(1);
 if (task.id === 'visual-review') process.exit(1);
 const output = process.argv[process.argv.indexOf('--output-last-message') + 1];
 fs.writeFileSync(output, JSON.stringify({ state: 'completed', summary: 'Fixture result',
@@ -130,6 +132,14 @@ console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 2, o
       encoding: 'utf8', env: { ...process.env, CREW_DATABASE_URL: url, PATH: `${repo}:${process.env.PATH}` }, cwd: repo,
     });
   }
+  const project = JSON.parse(await readFile(join(repo, config), 'utf8'));
+  project.runtime.model = 'test-model';
+  const leadProfile = project.profiles.find(profile => profile.id === 'lead-engineer');
+  leadProfile.model = 42;
+  await writeFile(join(repo, config), JSON.stringify(project));
+  assert.match(cli('project', 'validate', '--file', config).stderr, /Invalid model for profile lead-engineer/);
+  leadProfile.model = 'test-planning-model';
+  await writeFile(join(repo, config), JSON.stringify(project));
   assert.equal(cli('project', 'register', '--file', config).status, 0);
   assert.equal(cli('project', 'register', '--file', websiteConfig).status, 0);
   const catalog = cli('run', 'start', 'catalog', '--project', 'pet-store', '--epic', 'epic-1');
@@ -137,6 +147,7 @@ console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 2, o
   const { run: staticRun } = JSON.parse(catalog.stdout);
   assert.deepEqual(staticRun.tasks.filter(task => task.attempts.length).map(task => task.packet.id), ['product-review', 'lead-review']);
   assert.ok(staticRun.tasks.slice(0, 2).every(task => task.attempts[0].evidenceStatus === 'recorded'));
+  assert.deepEqual(staticRun.tasks.slice(0, 2).map(task => task.attempts[0].runtime.model), ['test-model', 'test-planning-model']);
 
   const website = cli('run', 'start', 'website', '--project', 'pet-store', '--epic', 'epic-2');
   assert.equal(website.status, 0, website.stderr);
@@ -382,6 +393,8 @@ test('workflow usage attributes retries and overlapping attempts, preserving mis
   project.runtime.tokenRates = { inputUsdPerMillion: 2, cachedInputUsdPerMillion: 0.5, outputUsdPerMillion: 5 };
   assert.throws(() => validateProject(project), /explicit runtime model/);
   project.runtime.model = 'test-model';
+  const leadProfile = project.profiles.find(profile => profile.id === 'lead-engineer');
+  leadProfile.model = 'test-planning-model';
   validateProject(project);
 
   const run = newRun(snapshot, 'budget', config);
@@ -418,6 +431,8 @@ test('workflow usage attributes retries and overlapping attempts, preserving mis
     attemptsMissingDuration: 0, overCostTarget: true });
   assert.equal(task.attempts[1].estimatedUsd, null);
   assert.equal(task.attempts[0].codexDurationMs, 3_000);
+  assert.equal(summary.tasks[1].attempts[0].runtime.model, 'test-planning-model');
+  assert.equal(summary.tasks[1].attempts[0].estimatedUsd, null);
   assert.equal(summary.usage.totalTokens, 1_300);
   assert.equal(summary.usage.durationMs, 11_000);
   assert.equal(summary.usage.attemptWindowMs, 9_000);

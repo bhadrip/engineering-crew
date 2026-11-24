@@ -1,0 +1,14 @@
+FROM node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS compiler
+RUN apk add --no-cache cmake make g++
+WORKDIR /src
+COPY whisper.tar.gz .
+RUN echo 'ec8e33f4c838ed459ad0a23da255c0262f150a6f54839a17e504ddf1495305d5  whisper.tar.gz' | sha256sum -c - \
+    && tar xzf whisper.tar.gz --strip-components=1 \
+    && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF \
+    && cmake --build build --target whisper-cli -j4
+
+FROM node@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
+COPY --from=compiler /src/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY ggml-base.bin /opt/whisper/ggml-base.bin
+RUN echo '465707469ff3a37a2b9b8d8f89f2f99de7299dac  /opt/whisper/ggml-base.bin' | sha1sum -c -
+ENV WHISPER_MODEL=/opt/whisper/ggml-base.bin

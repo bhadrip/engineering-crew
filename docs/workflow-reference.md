@@ -25,15 +25,46 @@ Each changed registration creates the next immutable version for that
 project and epic. An identical registration returns the latest version.
 `run start` uses the latest by default. Replay with a fresh run ID and the
 original `--version`. Existing runs retain their configuration and inputs.
+Use `--brief-file` with `run start` to supply a new request brief to a saved
+version. Crew records the submitted brief as a run input and uses the workflow
+version’s defaults for the other inputs.
 Keep prompt files in Git. A profile can list its own skills under
 `skills/<agent-id>/<skill>/SKILL.md` and explicitly opt into shared skills
 under `skills/common/<skill>/SKILL.md` in its repository.
+
+Set `model` on an entry in `profiles` to choose its Codex model. Each task uses
+the model of its assigned profile, including any reassignment at triage.
+Profiles without a model inherit `runtime.model`. If both settings are absent,
+Codex selects its default. Each attempt records the model Crew requested when
+one is configured.
 
 The browser and CLI read the same database. Use `workspace show` to list
 projects and epics with runs, `run show <run>` for the run record, and
 `artifact read <run> <artifact>` for a specific attachment.
 Select a browser project with `crew ui --project-id <project>` or
 `crew ui <run>`. `task dispatch --events` emits machine-readable events.
+
+Set `dispatchMode` to `automatic` in a version to queue new assignments as
+their prerequisites clear. A standalone `crew worker --project-id <project>`
+can process the queue independently of `crew ui --external-worker`.
+`crew worker status --project-id <project>` checks the worker’s Postgres
+connection. Only one standalone worker owns a project queue at a time.
+In-flight attempts finish on a graceful worker shutdown. A dashboard
+without `--external-worker` processes the queue while it is running.
+`crew run advance <run>` processes ready steps on demand, and
+`crew run start --no-dispatch` creates an automatic run
+in a paused state, and `crew run automation <run> resume` reopens its queue.
+An active attempt stays with its worker. Recover disconnected attempts from
+their handoff before deciding how to continue.
+
+Set a step’s `reviewMode` to `automatic` to record acceptance when required
+outputs and execution evidence validate. Steps default to human acceptance.
+
+Steps with `workspaceSource: "delivery"` use the project's latest published
+workspace at run creation. Use `crew run start --from-delivery <run>` to select
+an earlier published run in the same project. The workspace is copied into
+the new run with its digest and source delivery. Before the first publication,
+the step uses any pinned workspace and its assignment inputs.
 
 ## Import existing runs
 
@@ -181,6 +212,8 @@ attempts, including retries. Set `costOwner` at project level or
 For estimated USD cost, pin `runtime.model` and set `inputUsdPerMillion` and
 `outputUsdPerMillion` under `runtime.tokenRates`. The optional
 `cachedInputUsdPerMillion` defaults to the input rate.
+These rates apply to attempts that use `runtime.model`. Attempts that specify
+a different model through their profile have an unknown USD estimate.
 Set `budget.costTargetUsd` per task to track its combined attempt cost.
 Missing usage or rates leave the corresponding estimate unknown.
 

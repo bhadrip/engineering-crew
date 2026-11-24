@@ -9,10 +9,12 @@
     "crew": "./bin/crew.mjs"
   },
   "scripts": {
+    "local": "node bin/local.mjs",
     "test": "node --test",
     "eval:check": "node evals/check.mjs"
   },
   "dependencies": {
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "playwright-core": "1.64.1"
   }
 }

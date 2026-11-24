@@ -60,7 +60,10 @@ export async function checkEvals() {
     const profile = loadProfile(entry);
     const suite = await loadSuite(entry.suite);
     const projects = projectsFor(entry);
-    const models = new Set(projects.map(project => json(project).runtime.model).filter(Boolean));
+    const models = new Set(projects.map(path => {
+      const project = json(path);
+      return project.profiles.find(profile => profile.id === entry.profile)?.model ?? project.runtime.model;
+    }).filter(Boolean));
     requireField(models.size <= 1 && projects.every(project => loadProfile({ ...entry, project }).digest === profile.digest),
       `All projects covered by ${name} must use the same profile and compatible model`);
     const skills = profile.profile.skills;
