@@ -89,10 +89,22 @@ test('Music Transcribe draft tests execute the unsaved definition and save its e
     assert.equal(job.attempt.effectivePermissions.liveSession, true);
     assert.equal(job.inputs[0].content, form.brief);
     return { outcome: 'completed', response: reply, submitted: { outputs: [{ slot: 'result', content }] },
-      activity: { responseFormat: 'free-form', response: reply },
-      receipt: { usage: null, responseFormat: 'free-form', replyDigest: artifactDigest(reply), submittedOutputDigests: { result: artifactDigest(content) } } };
+      activity: { responseFormat: 'free-form', response: reply, toolCalls: [
+        { server: 'crew_workflow', tool: 'submit_workflow_output', status: 'completed' },
+      ] },
+      receipt: { usage: null, responseFormat: 'free-form', replyDigest: artifactDigest(reply), submittedOutputDigests: { result: artifactDigest(content) },
+        codexRuntime: { request: { model: 'fixture-model', workspace: 'tools', flags: { shell_tool: false },
+          servers: [{ id: 'lesson-notes', name: 'Lesson notes' }] },
+        thread: { verified: true, model: 'fixture-model', sandbox: 'readOnly' },
+        flags: { shell_tool: false }, mcp: [{ id: 'lesson-notes', state: 'authenticationRequired' }] },
+      } };
   });
   await decide(store, 'step-1', attempt.id, 'accepted', 'Verified the draft evidence.');
+  const handoff = await fetch(origin + `/runs/${firstId}/tasks/step-1`).then(response => response.text());
+  assert.match(handoff, /Codex runtime configuration[\s\S]+<th scope="col">Requested<\/th><th scope="col">App Server<\/th>/);
+  assert.match(handoff, /Lesson notes<\/strong> · Sign-in required/);
+  assert.match(handoff, /Observed tool calls[\s\S]+Submit workflow output[\s\S]+1 completed/);
+  assert.match(handoff, /shell_tool<\/th><td>Off<\/td><td>Off<\/td>/);
   assert.equal((await post(`/runs/${firstId}/publish-workspace`, { attempt: attempt.id })).status, 409);
   const run = await store.read();
   assert.equal(run.project.configurationVersion, undefined);
@@ -627,10 +639,12 @@ test('Music Transcribe Agents shows project revisions, pinned assignments, and l
       steps: [{ id: 'plan', title: 'Plan the rhythm practice', objective: 'Write the rhythm practice plan.', owner: 'Project owner',
         agent: `library:${agent.id}:1`, inputs: ['brief'], prerequisites: [] }] } });
   await registerProject(db, snapshot);
-  assert.equal((await post(editor, { ...submit, version: '1', instructions: 'Use a four-beat warmup.' })).status, 303);
+  assert.equal((await post(editor, { ...submit, version: '1', instructions: 'Use a four-beat warmup.', 'skill-search': '1' })).status, 303);
   const [edited] = await listReusableAgents(db, project);
   assert.deepEqual(edited.definition.featureSource, agent.definition.featureSource);
   assert.equal(edited.version, 2);
+  assert.equal(edited.definition.runtime.skillSearch, true);
+  assert.equal(snapshot.agentOrigins[agent.id + '-v1'].codexRuntime.skillSearch, undefined);
   const role = await fetch(base + '?role=planner', { redirect: 'manual' });
   assert.equal(role.headers.get('location'), `/projects/${project}/agents?agent=${agent.id}`);
   const current = await fetch(editor).then(response => response.text());
@@ -638,6 +652,7 @@ test('Music Transcribe Agents shows project revisions, pinned assignments, and l
   assert.match(current, /Compare revisions/);
   assert.match(current, /Rhythm practice · v1[\s\S]+Agent v1 · Plan the rhythm practice/);
   assert.match(current, /Use a four-beat warmup\./);
+  assert.match(current, /name="skill-search" value="1" checked/);
   const pinned = await fetch(editor + '&version=1').then(response => response.text());
   assert.match(pinned, /Saved version 1[\s\S]+Open current version[\s\S]+Use three repetitions\./);
   assert.match(pinned, /<fieldset class="configuration-card" disabled>/);
@@ -648,6 +663,7 @@ test('Music Transcribe Agents shows project revisions, pinned assignments, and l
   const comparison = await fetch(compare).then(response => response.text());
   assert.match(comparison, /<h1>Compare agent revisions<\/h1>/);
   assert.match(comparison, /<pre>Use three repetitions\.<\/pre>[\s\S]+<pre>Use a four-beat warmup\.<\/pre>/);
+  assert.match(comparison, /Native skill search[\s\S]+<p>Off<\/p>[\s\S]+<p>On<\/p>/);
   assert.match(await fetch(compare + '&from=2&to=2').then(response => response.text()), /The saved settings match/);
   assert.equal((await fetch(compare + '&to=3')).status, 404);
   const workflow = await fetch(origin + `/projects/${project}/workflows?workflow=rhythm-practice&version=1`).then(response => response.text());

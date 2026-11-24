@@ -25,6 +25,7 @@ function profileSetup(project, profile, tasks, report) {
     ...(runtime.workspace !== 'tools' ? ['Shell and file tools'] : []),
     ...(runtime.imageInspection ? ['Workspace image inspection'] : []),
     ...(runtime.imageGeneration ? ['Native image generation'] : []),
+    ...(runtime.skillSearch ? ['Native skill search'] : []),
     ...(runtime.delegation ? ['Codex subagents'] : []),
     ...(runtime.hooks || runtime.hostHooks ? ['Codex lifecycle hooks'] : []),
     ...(origin?.codexTools ?? []).map(tool => workflowAgentTools[tool]?.title ?? tool),

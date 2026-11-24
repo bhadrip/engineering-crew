@@ -28,6 +28,7 @@ if(process.argv[2]==='plugin'){
     const {id,method}=JSON.parse(line);
     if(method==='initialize')send(id,{userAgent:'codex-fixture'});
     if(method==='model/list')send(id,{data:[{model:'fixture-model',isDefault:true,additionalSpeedTiers:['priority']}],nextCursor:null});
+    if(method==='experimentalFeature/list')send(id,{data:[{name:'skill_search',enabled:process.argv[process.argv.indexOf('skill_search')-1]==='--enable'}],nextCursor:null});
     if(method==='turn/start')process.exit(5);
   });
 }`, { mode: 0o700 });
@@ -39,7 +40,7 @@ if(process.argv[2]==='plugin'){
   const first = await saveReusableAgent(db, { ...shared, model: 'fixture-model',
     runtime: { ...runtime, serviceTier: 'ultrafast', plugins: ['missing@crew-fixture'] } });
   const second = await saveReusableAgent(db, { ...shared, id: first.id, expectedVersion: first.version, model: 'fixture-model',
-    runtime: { ...runtime, serviceTier: 'priority' } });
+    runtime: { ...runtime, serviceTier: 'priority', skillSearch: true } });
   const save = async agent => registerProject(db, await buildWorkflowSnapshot(db, { project, workflowId, sourceCommit: 'a'.repeat(40),
     draft: { title: 'Worker setup', goal: 'Review a lesson.', brief: 'Review the full phrase.', steps: [
       { id: 'review', title: 'Review the lesson', owner: 'Owner', objective: 'Review the full phrase.', inputs: ['brief'], prerequisites: [],
@@ -73,7 +74,7 @@ if(process.argv[2]==='plugin'){
     assert.equal(await readWorkflowSetup(db, project.id, workflowId, 2), undefined);
     await requestWorkflowSetup(db, project.id, workflowId, 2);
     assert.deepEqual((await completed(2)).profiles[0].checks.map(({ label, state }) => [label, state]), [
-      ['fixture-model', 'ready'], ['Fast', 'ready'],
+      ['fixture-model', 'ready'], ['Fast', 'ready'], ['Native skill search', 'ready'],
     ]);
     assert.deepEqual(await completed(1), checked);
     assert.equal((await db.query('SELECT count(*) FROM engineering_crew.runs')).rows[0].count, '0');

@@ -59,7 +59,7 @@ if (args[0] === 'app-server') {
   const replies = createInterface({ input: process.stdin });
   const emit = event => process.stdout.write(JSON.stringify(event) + '\n');
   const threadId = 'fixture-thread';
-  let developerInstructions, streamReplies, unavailableSpeed, turn = 0;
+  let developerInstructions, streamReplies, unavailableSpeed, elicitationTurn, turn = 0;
   const scoped = args.includes('apps._default.enabled=false');
   const apps = [
     { id: 'connector_music_fixture', runtimeName: 'Music Notes', enabled: true, callable: true },
@@ -67,8 +67,22 @@ if (args[0] === 'app-server') {
     { id: 'connector_blocked_fixture', runtimeName: 'Blocked Notes', enabled: false, callable: false },
   ];
   for await (const line of replies) {
-    const { method, id, params } = JSON.parse(line);
+    const message = JSON.parse(line);
+    const { method, id, params } = message;
     if (id === undefined) continue;
+    if (id === 'unknown-tool-form' && !method) {
+      assert.deepEqual(message.result, { action: 'cancel', content: null });
+      continue;
+    }
+    if (id === 'timing-tool-form' && !method) {
+      assert.deepEqual(message.result, { action: 'accept', content: { tempo: 75, loop: false } });
+      emit({ method: 'serverRequest/resolved', params: { threadId, requestId: id } });
+      emit({ method: 'item/completed', params: { threadId, turnId: elicitationTurn, item: {
+        type: 'agentMessage', id: 'form-reply', phase: 'finalAnswer', text: 'Timing settings received.',
+      } } });
+      emit({ method: 'turn/completed', params: { threadId, turn: { id: elicitationTurn, status: 'completed' } } });
+      continue;
+    }
     let result;
     if (method === 'initialize') {
       streamReplies = !params.capabilities?.optOutNotificationMethods?.includes('item/agentMessage/delta');
@@ -77,6 +91,28 @@ if (args[0] === 'app-server') {
     else if (method === 'config/read') result = { config: { apps: { connector_explicit_fixture: { enabled: true } } } };
     else if (method === 'app/installed') result = { apps: apps.map(app => scoped && !args.includes('apps.' + app.id + '.enabled=true') ?
       { ...app, enabled: false, callable: false } : app) };
+    else if (method === 'experimentalFeature/list') {
+      assert.equal(params.threadId, threadId);
+      result = { data: [{ name: 'shell_tool', enabled: false },
+        { name: 'skill_search', enabled: args[args.indexOf('skill_search') - 1] === '--enable' },
+        { name: 'private-fixture-flag', enabled: true }], nextCursor: null };
+    }
+    else if (method === 'skills/list') {
+      assert.equal(params.forceReload, true);
+      const [cwd] = params.cwds;
+      const path = join(cwd, '.agents/skills/crew-skill-1/SKILL.md');
+      assert.match(readFileSync(path, 'utf8'), /name: native-timing-checks/);
+      result = { data: [{ cwd, skills: [{ path, name: 'native-timing-checks', enabled: true },
+        { path: '/private-worker-skill/SKILL.md', name: 'unselected-worker-skill', enabled: true }] }] };
+    }
+    else if (method === 'mcpServerStatus/list' && params.threadId) {
+      assert.equal(params.threadId, threadId);
+      assert.equal(params.detail, 'toolsAndAuthOnly');
+      const name = params.serverName;
+      result = { data: [{ name, runtimeStatus: 'connected', authStatus: 'unsupported',
+        tools: { read_input: { name: 'read_input', description: 'Private fixture description' } } },
+      { name: 'private-fixture-server', runtimeStatus: 'connected', tools: {} }], nextCursor: null };
+    }
     else if (method === 'mcpServerStatus/list' && params.serverName === 'codex_apps') result = { data: [{ name: 'codex_apps', tools: {
       'music_notes.read_excerpt': { name: 'music_notes.read_excerpt', _meta: { connector_id: 'connector_music_fixture' } },
       'other_notes.read_excerpt': { name: 'other_notes.read_excerpt', _meta: { connector_id: 'connector_unselected_fixture' } },
@@ -96,20 +132,22 @@ if (args[0] === 'app-server') {
       developerInstructions = params.developerInstructions;
       unavailableSpeed = params.serviceTier === 'ultrafast';
       result = { thread: { id: threadId, ephemeral: params.ephemeral }, cwd: params.cwd, approvalPolicy: params.approvalPolicy,
-        ...(params.serviceTier && { serviceTier: unavailableSpeed ? null : params.serviceTier, model: params.model }),
+        model: params.model, modelProvider: 'openai', reasoningEffort: config('model_reasoning_effort'),
+        ...(params.serviceTier && { serviceTier: unavailableSpeed ? null : params.serviceTier }),
         ...(params.permissions ? { activePermissionProfile: { id: params.permissions } } : { sandbox: { type: 'readOnly', networkAccess: false } }) };
     } else if (method === 'turn/start') {
       const turnId = ++turn === 1 ? 'fixture-turn' : 'fixture-turn-' + turn;
       assert.ok(!unavailableSpeed, 'A rejected explicit speed must stop before starting the turn.');
       assert.equal(params.threadId, threadId);
       const freeForm = Boolean(developerInstructions);
+      const formTest = freeForm && params.input[0].text === 'Ask the timing tool for its form.';
       assert.equal(streamReplies, freeForm);
       assert.equal(Object.hasOwn(params, 'outputSchema'), !freeForm);
       const assignment = freeForm && JSON.parse(developerInstructions.split('\n\n').at(-1)).assignment;
       if (freeForm) {
-        if (turn === 1) assert.equal(params.input[0].text,
+        if (turn === 1 && !formTest) assert.equal(params.input[0].text,
           assignment ? assignment.objective + '\n\nRequest brief\n\nWrite the timing notes.' : 'Write the timing notes.');
-        else {
+        else if (turn > 1) {
           const missing = assignment.objective === 'Recover a partial handoff.' ? assignment.outputs[1].id : assignment.outputs[0].id;
           assert.match(params.input[0].text, new RegExp('Required outputs still missing: ' + missing + '\\.'));
           assert.equal(params.input.length, 1);
@@ -118,6 +156,17 @@ if (args[0] === 'app-server') {
       }
       emit({ method: 'turn/started', params: { threadId, turn: { id: turnId } } });
       emit({ id, result: { turn: { id: turnId } } });
+      if (formTest) {
+        elicitationTurn = turnId;
+        const form = { mode: 'form', message: 'Choose timing settings.', threadId, turnId: null, requestedSchema: {
+          type: 'object', required: ['tempo', 'loop'], properties: {
+            tempo: { type: 'integer', minimum: 50, maximum: 120 }, loop: { type: 'boolean' },
+          },
+        } };
+        emit({ id: 'unknown-tool-form', method: 'mcpServer/elicitation/request', params: { ...form, serverName: 'unattached' } });
+        emit({ id: 'timing-tool-form', method: 'mcpServer/elicitation/request', params: { ...form, serverName: 'lesson-timing' } });
+        continue;
+      }
       const item = item => emit({ method: 'item/completed', params: { threadId, turnId, item } });
       if (args[args.indexOf('image_generation') - 1] === '--enable') {
         assert.equal(args[args.indexOf('omit_app_server_notification_media') - 1], '--disable');

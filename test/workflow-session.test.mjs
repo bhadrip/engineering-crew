@@ -1,10 +1,90 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { codexQuestionSet, finishWorkflowSession, queueWorkflowSessionAction, recoverWorkflowAttempt, workflowSessionControls } from '../lib/workflow-session.mjs';
+import { codexQuestionSet, finishWorkflowSession, queueWorkflowSessionAction, recoverWorkflowAttempt, visibleWorkflowSession,
+  workflowSessionControls } from '../lib/workflow-session.mjs';
+import { mcpElicitationRequest, mcpElicitationResponse } from '../lib/workflow-elicitation.mjs';
 import { artifact, observeRunWorkers, runStore } from '../lib/run-store.mjs';
 import { allowAdditionalAttempt, dispatch } from '../lib/workflow.mjs';
 import { recordCodexCheckpoint, recordWorkspaceCheckpoint } from '../lib/workflow-checkpoint.mjs';
 import { memoryRunStore, postgres, testDatabase } from '../test-support/stores.mjs';
+
+test('MCP forms keep native types, validate the active request, and clear delivered values', async () => {
+  const schema = { type: 'object', required: ['pace', 'loop', 'cycles'], properties: {
+    pace: { type: 'string', oneOf: [{ const: 'slow', title: 'Slow' }, { const: 'normal', title: 'Normal' }] },
+    loop: { type: 'boolean', default: false },
+    cycles: { type: 'integer', minimum: 1, maximum: 5 },
+    evidence: { type: 'array', items: { type: 'string', enum: ['waveform', 'transcript'] }, maxItems: 2 },
+    review: { type: 'string', maxLength: 30 },
+    due: { type: 'string', format: 'date' },
+  } };
+  const tool = { id: 'timing', name: 'Timing review', version: 1 };
+  const { elicitation } = mcpElicitationRequest({ mode: 'form', message: 'Choose your settings.', requestedSchema: schema }, tool);
+  assert.equal(elicitation.fields[1].default, false);
+  assert.equal(mcpElicitationRequest({ mode: 'url', message: 'Open site', requestedSchema: schema }, tool), null);
+  const form = new URLSearchParams([['mcp-action', 'accept'], ['mcp-field-0', '1'], ['mcp-field-1', 'false'],
+    ['mcp-field-2', '2'], ['mcp-field-3', '1'], ['mcp-field-3', '2'], ['mcp-field-4', 'Rehearsal note'], ['mcp-field-5', '2026-11-24']]);
+  const expected = { pace: 'slow', loop: false, cycles: 2, evidence: ['waveform', 'transcript'], review: 'Rehearsal note', due: '2026-11-24' };
+  assert.deepEqual(mcpElicitationResponse(elicitation, form), { action: 'accept', content: expected });
+  assert.deepEqual(mcpElicitationResponse(elicitation, new URLSearchParams({ 'mcp-action': 'decline' })), { action: 'decline' });
+  const invalid = new URLSearchParams(form);
+  invalid.set('mcp-field-2', '6');
+  assert.throws(() => mcpElicitationResponse(elicitation, invalid), /valid value for cycles/);
+
+  const store = memoryRunStore();
+  await store.create({ tasks: [{ packet: { id: 'review' }, attempts: [{ id: 'first', outcome: 'running' }] }] });
+  const controls = workflowSessionControls(store, 'review', 'first');
+  await controls.ready({ turnId: 'active', threadId: 'thread' });
+  await controls.ask({ id: 'tool-request', kind: 'elicitation', elicitation });
+  const reply = (turnId, values) => queueWorkflowSessionAction(store, 'review', 'first',
+    { kind: 'elicitation', turnId, requestId: 'tool-request', form: values });
+  await assert.rejects(reply('old', form), /turn has ended/);
+  await assert.rejects(reply('active', invalid), /valid value for cycles/);
+  await reply('active', form);
+  await assert.rejects(reply('active', form), /already has a decision/);
+  const session = async () => (await store.read()).tasks[0].attempts[0].codexSession;
+  assert.equal(visibleWorkflowSession(await session()).actions[0].pendingElicitationValues, undefined);
+  const command = await controls.next();
+  assert.equal(command.responseAction, 'accept');
+  assert.deepEqual(command.pendingElicitationValues, expected);
+  await controls.settle(command.id, 'acknowledged');
+  const [settled] = (await session()).actions;
+  assert.equal(settled.status, 'acknowledged');
+  assert.equal(settled.pendingElicitationValues, undefined);
+});
+
+test('MCP links expose the destination origin, redirect once with consent, and clear the private URL', async () => {
+  const server = { id: 'review-portal', name: 'Review portal' };
+  const pending = url => mcpElicitationRequest({ mode: 'url', elicitationId: 'provider-request-1', url,
+    message: 'Open ' + url + ' to confirm the review.' }, server);
+  const url = 'https://review.example.org/start?state=synthetic-token';
+  assert.equal(pending('javascript:alert(1)'), null);
+  assert.equal(pending('http://review.example.org/start'), null);
+  assert.equal(pending('https://login:password@review.example.org/start'), null);
+  assert.equal(pending('http://127.0.0.1:4040/check').elicitation.destination, 'http://127.0.0.1:4040');
+  const request = pending(url);
+  assert.deepEqual(request.elicitation, { mode: 'url', server, destination: 'https://review.example.org',
+    message: 'Open https://review.example.org to confirm the review.' });
+
+  const store = memoryRunStore();
+  await store.create({ tasks: [{ packet: { id: 'review' }, attempts: [{ id: 'first', outcome: 'running' }] }] });
+  const controls = workflowSessionControls(store, 'review', 'first');
+  await controls.ready({ turnId: 'active', threadId: 'thread' });
+  await controls.ask({ id: 'open-link', kind: 'elicitation', ...request });
+  await controls.ask({ id: 'decline-link', kind: 'elicitation', ...request });
+  const session = async () => (await store.read()).tasks[0].attempts[0].codexSession;
+  assert.doesNotMatch(JSON.stringify(visibleWorkflowSession(await session())), /synthetic-token/);
+  const reply = (requestId, action) => queueWorkflowSessionAction(store, 'review', 'first',
+    { kind: 'elicitation', turnId: 'active', requestId, form: new URLSearchParams({ 'mcp-action': action }) });
+  assert.equal(await reply('open-link', 'accept'), url);
+  await assert.rejects(reply('open-link', 'accept'), /already has a decision/);
+  assert.equal(await reply('decline-link', 'decline'), undefined);
+  assert.doesNotMatch(JSON.stringify(await session()), /synthetic-token/);
+  const opened = await controls.next();
+  assert.equal(opened.responseAction, 'accept');
+  assert.equal(opened.pendingElicitationValues, undefined);
+  const declined = await controls.next();
+  assert.equal(declined.responseAction, 'decline');
+});
 
 test('a recorded run-only approval permits exactly one additional rework attempt', async () => {
   const store = memoryRunStore();

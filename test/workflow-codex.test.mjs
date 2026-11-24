@@ -130,14 +130,55 @@ test('a versioned agent uses selected MCP tools and its pinned skill during one 
       instructions: ['Use the pinned practice notes.'],
       inputs: [{ id: 'input-brief', title: 'Message', kind: 'text', content: prompt }] };
     const updates = [];
-    const direct = await executeWorkflowCodex({ ...steps, standaloneAgent: true, onAgentActivity: entry => updates.push(entry) });
+    const direct = await executeWorkflowCodex({ ...steps, profile: { ...steps.profile, codexTools: ['read_input'] },
+      standaloneAgent: true, onAgentActivity: entry => updates.push(entry) });
     const markdown = '# Timing notes\n\nRepeat the phrase slowly.';
     assert.equal(direct.outcome, 'completed', direct.error);
     assert.equal(direct.activity.launch.args[0], 'app-server');
     assert.equal(direct.activity.prompt, prompt);
     assert.equal(direct.activity.response, markdown);
     assert.equal(direct.response, markdown);
-    assert.deepEqual(updates, [{ kind: 'reply', text: markdown, itemId: 'reply', truncated: false }]);
+    assert.deepEqual(updates.filter(update => update.kind === 'reply'), [{ kind: 'reply', text: markdown, itemId: 'reply', truncated: false }]);
+    const { request, thread, flags, mcp } = direct.receipt.codexRuntime;
+    assert.equal(request.workspace, 'tools');
+    assert.equal(request.flags.shell_tool, false);
+    assert.equal(thread.verified, true);
+    assert.equal(thread.sandbox, 'readOnly');
+    assert.equal(thread.reasoningEffort, request.reasoningEffort);
+    assert.deepEqual(flags, { shell_tool: false, skill_search: false });
+    assert.deepEqual(mcp, [{ id: request.servers[0].id, state: 'connected', tools: ['read_input'], toolCount: 1 }]);
+    assert.doesNotMatch(JSON.stringify(direct.receipt.codexRuntime), /Private fixture|private-fixture/);
+    const skillSearch = await executeWorkflowCodex({ ...steps, standaloneAgent: true, profile: {
+      ...steps.profile, skillNames: ['Native timing checks'], codexRuntime: workflowNativeSettings({
+        ...steps.profile.codexRuntime, workspace: 'read-only', skillSearch: true,
+      }),
+    }, instructions: [...steps.instructions, '---\nname: native-timing-checks\ndescription: Verify timing.\n---\nRead the timing cue.'] });
+    assert.equal(skillSearch.outcome, 'completed', skillSearch.error);
+    assert.equal(skillSearch.receipt.codexRuntime.request.flags.skill_search, true);
+    assert.equal(skillSearch.receipt.codexRuntime.flags.skill_search, true);
+    assert.deepEqual(skillSearch.receipt.codexRuntime.skills, [{ number: 1, name: 'native-timing-checks', state: 'available' }]);
+    assert.equal(skillSearch.receipt.explicitSkills, undefined);
+    assert.equal(skillSearch.receipt.toolPolicy.skillSearch, true);
+    assert.doesNotMatch(JSON.stringify(skillSearch.receipt.codexRuntime), /private-worker-skill|unselected-worker-skill/);
+    let queued;
+    const formReplies = [];
+    const formRun = await executeWorkflowCodex({ ...steps, standaloneAgent: true,
+      inputs: [{ ...steps.inputs[0], content: 'Ask the timing tool for its form.' }],
+      profile: { ...steps.profile, codexRuntime: workflowNativeSettings({ ...steps.profile.codexRuntime, mcpServers: ['lesson-timing'] }) },
+      sessionControls: {
+        ready() {},
+        ask(request) {
+          assert.equal(request.kind, 'elicitation');
+          assert.deepEqual(request.elicitation.server, { id: 'lesson-timing', name: 'lesson-timing' });
+          queued = { ...request, responseAction: 'accept', pendingElicitationValues: { tempo: 75, loop: false } };
+        },
+        next() { const response = queued; queued = undefined; return response; },
+        settle(id, status) { formReplies.push({ id, status }); },
+      } });
+    assert.equal(formRun.outcome, 'completed', formRun.error);
+    assert.equal(formRun.response, 'Timing settings received.');
+    assert.equal(formReplies.length, 1);
+    assert.equal(formReplies[0].status, 'acknowledged');
     const workflow = await executeWorkflowCodex(steps);
     assert.equal(workflow.outcome, 'completed', workflow.error);
     assert.equal(workflow.activity.launch.args[0], 'app-server');

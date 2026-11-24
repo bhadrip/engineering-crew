@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual, promisify } from 'node:util';
 import { CrewError, id } from '../lib/contracts.mjs';
-import { artifactPage, epicPage, errorPage, projectAgentsHref as libraryHref, projectPage, projectSkillHref, runPage, workflowRunHref,
+import { artifactPage, epicPage, errorPage, escape, layout, projectAgentsHref as libraryHref, projectPage, projectSkillHref, runPage, workflowRunHref,
   workflowSetupHref } from './views.mjs';
 import { featurePreviewPage, featureRequestPage, featureRequestsPage } from './feature-views.mjs';
 import { featureDiffPage } from './feature-diff.mjs';
@@ -1187,11 +1187,15 @@ export async function serve({ repo, projectId, port, externalWorker = false }) {
             if (error instanceof CrewError && error.code === 3) return send(response, 409, errorPage(error.message, url.pathname));
             throw error;
           }
-        } else if (['steer', 'interrupt', 'answer', 'approval'].includes(action)) {
+        } else if (['steer', 'interrupt', 'answer', 'approval', 'elicitation'].includes(action)) {
           try {
-            await queueWorkflowSessionAction(runStore(configurationsDb, selectedRun), id(item, 'task ID'), form.get('attempt'), {
+            const destination = await queueWorkflowSessionAction(runStore(configurationsDb, selectedRun), id(item, 'task ID'), form.get('attempt'), {
               kind: action, turnId: form.get('turn'), message: form.get('guidance'), requestId: form.get('request'), form,
             });
+            // Start navigation after the same-origin form submission completes.
+            if (destination) return send(response, 200, layout('Opening tool site',
+              `<main><h1>Opening tool site</h1><p><a href="${escape(destination)}" rel="noreferrer">Continue to the site</a></p></main>`),
+            'text/html', { Refresh: '0; url=' + destination, 'Referrer-Policy': 'no-referrer' });
           } catch (error) {
             if (error instanceof CrewError && error.code === 3) return send(response, 409, errorPage(error.message, url.pathname));
             throw error;

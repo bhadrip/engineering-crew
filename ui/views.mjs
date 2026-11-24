@@ -5,7 +5,7 @@ import { describeCodexLaunch, formatCodexLaunch } from '../lib/feature-codex-com
 import { agentConversationHistory, agentMessageLimit, canAllowAdditionalAttempt, canReuseCodexHistory, infrastructureRetry, packetAttemptsUsed,
   workflowAnswerLimit, workflowAttemptLimit } from '../lib/workflow-session.mjs';
 import { approvalReviewLabel } from '../lib/workflow-approvals.mjs';
-import { approvalModes, codexServiceTierLabel } from '../lib/workflow-native.mjs';
+import { approvalModes, codexServiceTierLabel, webSearchModes, workspaceModes } from '../lib/workflow-native.mjs';
 import { conditionOperators } from '../lib/workflow-routing.mjs';
 import { readWorkspaceArtifact } from '../lib/workflow-workspace.mjs';
 import { verifiedTraceLink } from '../lib/langfuse.mjs';
@@ -59,6 +59,10 @@ function status(attempt, agentRun = false) {
     if (attempt.workspaceChecksStartedAt) return ['Running local acceptance checks', 'Crew is testing the captured workspace in the pinned audio runtime.', 'neutral'];
     if (attempt.codexSession?.actions.some(item => item.kind === 'approval' && item.status === 'waiting'))
       return ['Codex needs approval', 'Review the requested action to continue this turn.', 'warning'];
+    const elicitation = attempt.codexSession?.actions.find(item => item.kind === 'elicitation' && item.status === 'waiting')?.elicitation;
+    if (elicitation) return elicitation.mode === 'url'
+      ? ['MCP tool requested a link', 'Review the destination and choose whether to open it.', 'warning']
+      : ['MCP tool needs input', 'Complete or decline the tool’s form to continue this turn.', 'warning'];
     if (attempt.codexSession?.actions.some(item => item.kind === 'answer' && item.status === 'waiting' && item.blocking))
       return ['Codex needs input', 'Answer the questions to continue this turn.', 'warning'];
     return ['Codex is working', 'Activity updates while the attempt runs.', 'neutral'];
@@ -955,6 +959,77 @@ function codexSpeedDetails(record) {
     (report ? ' · ' + (report.applied ? 'App Server reported ' + escape(codexServiceTierLabel(report.applied)) : 'App Server reported no tier') : '') + '</p>';
 }
 
+function codexRuntimeDetails(run, task, profile, attempt, view) {
+  const observation = attempt?.codexObservation;
+  if (!observation) return '';
+  const { runtime, reportedModel, explicitSkills, toolCalls, recent } = observation;
+  const { request, thread, flags, mcp = [], skills: discoveredSkills } = runtime ?? {};
+  const detailId = 'codex-runtime-' + attempt.id;
+  const policy = attempt.effectivePermissions ?? {};
+  const speed = attempt.codexSpeed;
+  const workspace = workspaceModes[request?.workspace ?? profile.codexRuntime?.workspace ?? 'tools'];
+  const history = value => value === undefined ? undefined : value ? 'Saved thread' : 'Ephemeral thread';
+  const rows = [
+    ['Model', request?.model ?? attempt.runtime?.model ?? 'Worker default', thread?.model],
+    ['Reasoning effort', request?.reasoningEffort ?? (profile.codexRuntime?.reasoningEffort || 'Worker default'), thread?.reasoningEffort],
+    ['Speed', codexServiceTierLabel(request?.serviceTier ?? attempt.requestedServiceTier),
+      speed?.applied ? codexServiceTierLabel(speed.applied) : undefined],
+    ['Workspace', workspace, thread?.verified ? workspace : thread?.sandbox],
+    ['Approval policy', approvalModes[request?.approval ?? policy.approval], approvalModes[thread?.approval] ?? thread?.approval],
+    ['Conversation history', history(request?.persistentHistory ?? Boolean(policy.saveThread)), history(thread?.persistentHistory)],
+    ['Web search', webSearchModes[request?.webSearch ?? policy.webSearch], undefined],
+  ];
+  const table = (columns, body) => `<table class="usage-table"><thead><tr>${columns.map(column =>
+    `<th scope="col">${column}</th>`).join('')}</tr></thead><tbody>${body.map(([label, ...values]) =>
+    `<tr><th scope="row">${escape(label)}</th>${values.map(value => `<td>${escape(value ?? 'Unreported')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const switchLabel = value => value === undefined ? undefined : value ? 'On' : 'Off';
+  const configuredServers = request?.servers ?? [
+    ...(policy.tools?.length ? [{ id: 'crew', name: 'Crew tools' }] : []),
+    ...(policy.codexMcpServers ?? []).map(id => ({ id, name: id })),
+    ...(policy.projectMcp ?? []).map(({ id, name, version }) => ({ id, name, version })),
+  ];
+  const mcpStates = { connected: 'Connected', starting: 'Starting', notStarted: 'Startup pending',
+    authenticationRequired: 'Sign-in required', failed: 'Connection failed', cancelled: 'Startup cancelled',
+    disabled: 'Disabled by Codex', unlisted: 'Missing from the thread inventory', unreported: 'Connection status unavailable' };
+  const serverList = configuredServers.map(({ id, name, version }) => {
+    const server = mcp.find(row => row.id === id);
+    const state = server ? mcpStates[server.state] : 'Inventory unavailable';
+    const catalog = server?.discoveryFailed ? 'Tool discovery failed' : Number.isInteger(server?.toolCount) ?
+      count(server.toolCount, 'advertised tool') : '';
+    return `<li><strong>${escape(name)}${version ? ' · v' + escape(version) : ''}</strong> · ${escape(state)}
+      ${catalog ? ' · ' + escape(catalog) : ''}
+      ${server?.tools?.length ? `<details id="${escape(detailId + '-' + id)}"><summary>Advertised tools</summary><ul>${server.tools.map(tool =>
+        `<li><code>${escape(tool)}</code></li>`).join('')}</ul></details>` : ''}</li>`;
+  }).join('');
+  const taskId = task.packet.id;
+  const skills = (profile.skillIds ?? []).map((id, index) => {
+    const explicit = explicitSkills.some(skill => skill.artifactId === id);
+    const discovery = discoveredSkills?.find(skill => skill.number === index + 1);
+    const discoveryState = { available: 'Discovered by Codex', disabled: 'Disabled by Codex', unlisted: 'Missing from the Codex skill catalog' }[discovery?.state];
+    return `<li><a href="${artifactHref(run.id, id, taskId, view)}">${escape(profile.skillNames?.[index] ?? id)}</a>
+      · ${explicit ? 'Passed to Codex for this turn' : 'Attached to the agent'}
+      ${discoveryState ? ' · ' + escape(discoveryState) : ''}${discovery?.name ? ' <code>$' + escape(discovery.name) + '</code>' : ''}</li>`;
+  }).join('');
+  const observed = toolCalls.map(({ tool, server, statuses }) => `<li>${escape(Object.hasOwn(codexToolLabels, tool) ? codexToolLabels[tool] : tool)}
+    <small> ${escape(server)} · ${escape(Object.entries(statuses).map(([state, count]) => count + ' ' + state).join(', '))}</small></li>`).join('');
+  return `<details class="agent-details" id="${escape(detailId)}" data-codex-runtime><summary>Codex runtime configuration</summary>
+  ${thread ? `<p>${thread.verified ? 'Codex confirmed the workspace and approval policy.' : 'Crew stopped before starting the turn because the launch policy did not match.'}
+    ${thread.permissionProfile ? ` Permission profile <code>${escape(thread.permissionProfile)}</code>.` : ''}</p>` :
+    '<p class="muted">App Server launch confirmation is unavailable for this attempt.</p>'}
+  ${table(['Setting', 'Requested', 'App Server'], rows)}
+  ${thread?.modelProvider ? `<p>Model provider <code>${escape(thread.modelProvider)}</code></p>` : ''}
+  ${reportedModel && reportedModel !== thread?.model ? `<p>Execution receipt model <code>${escape(reportedModel)}</code></p>` : ''}
+  ${skills ? `<h4>Skills</h4><ul>${skills}</ul>` : ''}
+  ${serverList ? `<h4>MCP servers</h4><ul>${serverList}</ul>` : ''}
+  ${request?.flags && Object.keys(request.flags).length ? `<details id="${escape(detailId + '-flags')}"><summary>Native feature flags</summary>
+    ${table(['Feature', 'Requested', 'App Server'], Object.entries(request.flags).sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, enabled]) => [name, switchLabel(enabled), switchLabel(flags?.[name])]))}</details>` : ''}
+  <h4>${recent ? 'Recent tool calls' : 'Observed tool calls'}</h4>
+  ${observed ? `<ul>${observed}</ul>` : '<p class="muted">No tool calls were recorded.</p>'}
+  ${attempt.receiptId ? `<p><a href="${artifactHref(run.id, attempt.receiptId, taskId, view)}">View execution receipt</a></p>` : ''}
+  </details>`;
+}
+
 function workspaceCheckpointDetails(run, taskId, checkpoint) {
   return `<p><a href="${artifactHref(run.id, checkpoint.artifactId, taskId)}">Workspace checkpoint</a>
     · ${number(checkpoint.fileCount)} ${checkpoint.fileCount === 1 ? 'file' : 'files'} · ${timestamp(checkpoint.capturedAt)}</p>
@@ -1043,6 +1118,50 @@ function codexApprovalForm(request, action, fields) {
     ${grants}<div class="buttons">${choices}</div></form>`;
 }
 
+function elicitationField(field, index) {
+  const { label, required, description, type, minimum, maximum, options, default: initial, format } = field;
+  const name = 'mcp-field-' + index;
+  const caption = escape(label) + (required ? '' : ' <small>Optional</small>');
+  const hint = description ? `<small class="muted">${escape(description)}</small>` : '';
+  if (type === 'array') return `<fieldset class="codex-question"><legend>${caption}</legend>${hint}
+    ${options.map((option, choice) => `<label class="codex-choice">
+      <input type="checkbox" name="${name}" value="${choice + 1}"${initial?.includes(option.value) ? ' checked' : ''}>
+      <span>${escape(option.label)}</span></label>`).join('')}</fieldset>`;
+  let input;
+  if (options || type === 'boolean') {
+    const choices = options?.map((option, choice) => ({ ...option, id: choice + 1 })) ??
+      [{ value: true, label: 'Yes', id: 'true' }, { value: false, label: 'No', id: 'false' }];
+    input = `<select name="${name}"${required ? ' required' : ''}><option value="">Choose an option</option>${choices.map(choice =>
+      `<option value="${choice.id}"${choice.value === initial ? ' selected' : ''}>${escape(choice.label)}</option>`).join('')}</select>`;
+  } else if (type === 'number' || type === 'integer') {
+    input = `<input type="number" name="${name}" value="${escape(initial)}" step="${type === 'integer' ? '1' : 'any'}"
+      ${minimum === undefined ? '' : `min="${minimum}"`}${maximum === undefined ? '' : ` max="${maximum}"`}${required ? ' required' : ''}>`;
+  } else {
+    const inputType = { email: 'email', uri: 'url', date: 'date' }[format] ?? 'text';
+    input = `<input type="${inputType}" name="${name}" value="${escape(initial)}" minlength="${minimum}" maxlength="${maximum}"
+      ${format === 'date-time' ? ' placeholder="2026-01-01T12:00:00Z"' : ''}${required && (minimum || format) ? ' required' : ''}>`;
+  }
+  return `<label class="agent-field">${caption}${hint}${input}</label>`;
+}
+
+function codexElicitationForm(request, action, fields) {
+  const { elicitation } = request;
+  const { server } = elicitation;
+  const link = elicitation.mode === 'url';
+  return `<form id="mcp-elicitation-${escape(request.id)}" method="post" action="${action}" class="live-codex-activity codex-question-form"${
+    link ? ' rel="noopener"' : ''}>
+    ${fields}<input type="hidden" name="request" value="${escape(request.id)}"><input type="hidden" name="action" value="elicitation">
+    <h4>${escape(server.name)} ${link ? 'requested a link' : 'needs input'}${server.version ? ' · v' + escape(server.version) : ''}</h4>
+    <p>${escape(elicitation.message)}</p>
+    ${link ? `<p>Destination <code>${escape(elicitation.destination)}</code></p>` : elicitation.fields.map(elicitationField).join('')}
+    <div class="buttons">
+      ${link ? '<button name="mcp-action" value="accept" formtarget="_blank">Open site in new tab</button>' :
+        '<button name="mcp-action" value="accept">Send to tool</button>'}
+      <button name="mcp-action" value="decline" class="secondary" formnovalidate>Decline</button>
+      <button name="mcp-action" value="cancel" class="secondary" formnovalidate>Cancel request</button>
+    </div></form>`;
+}
+
 function liveTurnControls(run, task, attempt) {
   if (!attempt?.effectivePermissions?.liveSession || attempt.outcome !== 'running') return '';
   const session = attempt.codexSession;
@@ -1056,6 +1175,8 @@ function liveTurnControls(run, task, attempt) {
   return `<div class="codex-session-controls">
     ${session.actions.filter(item => item.kind === 'approval' && item.status === 'waiting')
       .map(item => codexApprovalForm(item, action, fields)).join('')}
+    ${session.actions.filter(item => item.kind === 'elicitation' && item.status === 'waiting')
+      .map(item => codexElicitationForm(item, action, fields)).join('')}
     ${session.actions.filter(item => item.kind === 'answer' && item.status === 'waiting')
       .map(item => codexQuestionForm(item, action, fields)).join('')}
     <form method="post" action="${action}" class="decision">${fields}
@@ -1072,7 +1193,7 @@ function sessionActions(attempt) {
   if (!actions?.length) return '';
   const labels = { queued: 'Queued', sending: 'Sending to Codex', acknowledged: 'Accepted by Codex', answered: 'Answered',
     closed: 'Closed without an answer', 'not-delivered': 'Could not deliver', unknown: 'Delivery unconfirmed' };
-  const kinds = { steer: 'Guidance', interrupt: 'Stop requested', answer: 'Codex questions' };
+  const kinds = { steer: 'Guidance', interrupt: 'Stop requested', answer: 'Codex questions', elicitation: 'MCP tool input' };
   const statusText = item => item.kind === 'approval' ?
     ({ closed: 'Closed without a decision', acknowledged: 'Decision received by Codex' })[item.status] ?? labels[item.status] ?? item.status :
     labels[item.status] ?? item.status;
@@ -1083,6 +1204,10 @@ function sessionActions(attempt) {
         `<p>${escape(question.text)}${item.answers ? `<br><strong>${escape(item.answers[index].text)}</strong>` : ''}</p>`).join('') :
         item.kind === 'approval' ? `<p>${escape(approvalReviewLabel(item.approval, item.review))}</p>
           <details><summary>Requested action</summary>${approvalDetails(item.approval)}</details>` :
+        item.kind === 'elicitation' ? '<p>' + escape(item.elicitation.server.name) +
+          (item.elicitation.destination ? ' · ' + escape(item.elicitation.destination) : '') +
+          (item.responseAction ? ' · ' + escape({ accept: item.elicitation.mode === 'url' ? 'Opening approved' : 'Form submitted',
+            decline: 'Declined', cancel: 'Cancelled' }[item.responseAction]) : '') + '</p>' :
         item.kind === 'steer' ? '<p>' + escape(item.text) + '</p>' : '') + '</li>').join('') + '</ol></section>';
 }
 
@@ -1126,6 +1251,7 @@ ${routingContext(run, task)}
 ${codexHistoryLink(run, latest) || plannedCodexHistory(run, task)}
 ${liveCodexActivity(latest)}
 ${workflowReply(run, task, latest)}
+${codexRuntimeDetails(run, task, profile, latest, 'pipeline')}
 ${codexSpeedDetails(latest)}
 ${recoveryProgress(run, task, latest)}
 ${sessionActions(latest)}
@@ -1208,9 +1334,10 @@ function attachedApps(profile) {
 }
 
 function nativeCapabilityDetails(settings, hookLinks = '') {
-  const { imageInspection, imageGeneration, commandEvidence, delegation, hostHooks, liveSession, saveThread, approvalMode, repositoryInstructions,
+  const { imageInspection, imageGeneration, commandEvidence, delegation, hostHooks, liveSession, saveThread, approvalMode, repositoryInstructions, skillSearch,
     serviceTier } = settings ?? {};
-  if (!imageInspection && !imageGeneration && !commandEvidence && !delegation && !hostHooks && !liveSession && !hookLinks && !repositoryInstructions && !serviceTier) return '';
+  if (!imageInspection && !imageGeneration && !commandEvidence && !delegation && !hostHooks && !liveSession && !hookLinks &&
+    !repositoryInstructions && !serviceTier && !skillSearch) return '';
   const defaults = delegation ? [
     delegation.model && 'Model ' + delegation.model,
     delegation.reasoningEffort && 'Reasoning ' + delegation.reasoningEffort,
@@ -1221,6 +1348,7 @@ function nativeCapabilityDetails(settings, hookLinks = '') {
     (imageInspection ? '<li>Workspace image inspection</li>' : '') +
     (imageGeneration ? '<li>Native Codex image generation</li>' : '') +
     (repositoryInstructions ? '<li>Native repository instruction discovery</li>' : '') +
+    (skillSearch ? '<li>Native skill search</li>' : '') +
     (commandEvidence ? '<li>Saved shell command details</li>' : '') +
     (liveSession ? '<li>Live Codex session</li>' : '') +
     (approvalMode ? '<li>Codex approvals · ' + escape(approvalModes[approvalMode]) + '</li>' : '') +
@@ -1381,6 +1509,7 @@ ${draft ? `<div><dt>Draft test</dt><dd><a href="${artifactHref(run.id, draft.art
 <section><h2>Evidence</h2>${evidenceLinks(run, packet.id, evidence, latest)}
 ${liveCodexActivity(latest)}
 ${workflowReply(run, task, latest)}
+${codexRuntimeDetails(run, task, profile, latest)}
 ${codexSpeedDetails(latest)}
 ${recoveryProgress(run, task, latest)}
 ${sessionActions(latest)}

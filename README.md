@@ -23,12 +23,14 @@ pilot](#run-the-carnatic-lesson-pilot) to prepare the local audio fixtures.
 1. Open **Agents → Add agent** to set the model, instructions, and workspace
    access. Attach a saved skill from **Skills** or an MCP connection from
    **Tools**. Use **Try this draft** to test the configuration or **Run agent**
-   to start a direct conversation with a saved revision. The Agents page lists
-   project-owned and shared definitions.
+   to start a direct conversation with a saved revision. Open an agent to see
+   its saved configuration and version history. The page lists project-owned
+   and shared definitions.
 2. Open **Workflows → New workflow** and define the assignments. Assign a
-   pinned agent version to each step. Use the dependency graph to decide
-   when steps can start, and choose the artifacts they pass forward.
-   Codex runs each assignment and can iterate with its configured tools.
+   pinned agent version to each step. Workflows have their own version history
+   and can reuse the same agent. Use the dependency graph to decide when steps
+   can start and which artifacts they pass forward. Codex runs each assignment
+   in its native loop with the agent's configured tools and skills.
    Use **Test draft**, then **Save tested revision** to save the exact
    configuration you tested.
 3. Open **Requests → New request**, choose a version of a saved workflow
@@ -38,6 +40,13 @@ pilot](#run-the-carnatic-lesson-pilot) to prepare the local audio fixtures.
 4. Open **Runs** to find the run and inspect its handoffs, original inputs,
    tool activity, outputs, and Codex execution receipts. Review and accept
    handoffs where the workflow calls for a human decision.
+
+Open **Codex runtime configuration** in a native Music Transcribe handoff to
+compare requested settings with the App Server launch response. The inspector
+links to pinned skills and shows which ones were discovered or passed explicitly
+for the turn. It displays MCP connection status and advertised tools when the
+run's Codex thread reports them, alongside the tool calls recorded for the
+attempt. Follow **View execution receipt** to inspect the stored evidence.
 
 ### Earlier feature requests
 
@@ -179,11 +188,12 @@ and trace it to the attempt that produced it.
 
 ## Configure, run, and trace
 
-**Postgres stores the workflow and its runs.** Provide a customer-managed
-Postgres database. Crew creates its own `engineering_crew` schema. Register a
-project and epic configuration to version their assignments, inputs, policies,
-and checks. Each run pins that version and stores its attempts, decisions,
-candidate files, and evidence in the same database.
+**Postgres stores configuration and run evidence.** Crew creates its own
+`engineering_crew` schema. Music Transcribe stores project-owned agents,
+skill versions, MCP connection definitions, and workflow versions there.
+Each run pins the configuration it used and stores its attempts, decisions,
+candidate files, and evidence in the same database. Saved native Codex thread
+history is kept on the worker when enabled.
 
 **Git supplies source and agent assets.** Commit static prompts and skills
 with the product source. Crew captures their contents from a Git revision
@@ -215,6 +225,10 @@ turn** to send the selected attachments through Codex’s native skill input.
 Use **Skills to invoke** on a workflow step or **Skills for this turn** in a
 saved conversation to explicitly invoke attachments from that agent revision.
 The activity receipt links each invocation to its pinned skill artifact.
+Enable **Let Codex search for skills** on a Music Transcribe agent to opt in
+to native skill search. The worker setup check reports whether Codex enables
+it, and the run inspector records whether the worker discovered each pinned
+attachment. Explicit invocation remains available.
 Music Transcribe agent runs and follow-ups accept up to four PNG or JPEG
 images, 4 MiB each and 6 MiB combined. Crew saves the original images with the
 turn in Postgres and sends them as image inputs to Codex App Server. The
@@ -462,9 +476,14 @@ questions, send guidance, or stop the active turn from a handoff. Crew
 starts the Codex App Server with the agent’s workspace and tool settings.
 The attempt records the questions, submitted answers, delivery status,
 and native thread and turn IDs. The turn runs within the step’s timeout.
-Set **Codex approvals** to review actions in a live handoff. Review the
-command, file changes, or requested permissions before responding.
-The attempt records the decision and the tool’s reported result.
+Set **Codex approvals** to **Review when Codex requests it** to review
+commands, file changes, and permission requests from the handoff. A connected
+MCP tool can also request a structured form or ask you to open a site. Submit
+the form, open the site in a new tab, decline, or cancel from the handoff.
+Crew records the decision and delivery status, keeps the destination origin
+for site requests, and clears temporary form values after the request settles.
+The connected tool reports the result of the site interaction to Codex.
+
 Enable **Save Codex thread history** to keep the conversation on the
 worker. After a rework decision, choose **Continue saved Codex thread**
 to open a new turn with that history. A workflow step can also copy the

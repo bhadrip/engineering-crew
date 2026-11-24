@@ -238,6 +238,9 @@ export function agentLibraryPage(project, { agents, agent, draft, adding, error,
         ${skillEditor(values.skills ?? [], Boolean(error),
           'Upload a folder to include its SKILL.md, references, scripts, and other resources.', skillBundleLimits)}
         ${projectSkillsEnabled(project.id) ? projectSkillFields(project, skillCatalog, values.projectSkills ?? []) : ''}
+        ${projectAgents ? `<label class="configuration-sharing"><input type="checkbox" name="skill-search" value="1"${runtime.skillSearch ? ' checked' : ''}>
+          Let Codex search for skills</label>
+        <p class="agent-field-hint">Uses Codex’s native skill search. The run records which attached skills the worker discovers. You can also pass a skill explicitly.</p>` : ''}
         <fieldset class="configuration-checks"><legend>Codex tools</legend>
           <p class="agent-field-hint">Codex can call the selected tools as it works. Input tools use this assignment’s pinned artifacts.</p>
           ${Object.entries(workflowAgentTools).filter(([, tool]) => !tool.projectId || tool.projectId === project.id).map(([tool, { title, description }]) =>
@@ -332,6 +335,7 @@ function agentRunSetup(project, agent, connections, { repositoryCommit, reposito
     ...(runtime.workspace !== 'tools' ? ['Shell and file tools'] : []),
     ...(runtime.imageInspection ? ['Workspace image inspection'] : []),
     ...(runtime.imageGeneration ? ['Native Codex image generation'] : []),
+    ...(runtime.skillSearch ? ['Native skill search'] : []),
     ...(runtime.delegation ? ['Codex subagents'] : []),
     ...(definition.tools ?? []).map(tool => workflowAgentTools[tool]?.title ?? tool),
     ...(runtime.mcpServers ?? []).map(name => name + ' · Worker MCP'),
@@ -424,6 +428,7 @@ export function readLibraryDraft(form) {
       pluginEnv: clean(form.get('codex-plugin-env')).split('\n').map(name => name.trim()).filter(Boolean),
       imageInspection: form.get('image-inspection') === '1',
       imageGeneration: form.get('image-generation') === '1',
+      skillSearch: form.get('skill-search') === '1',
       commandEvidence: form.get('command-evidence') === '1',
       repositoryInstructions: form.get('repository-instructions') === '1',
       liveSession: saveThread || approvalMode !== 'never' || form.get('live-session') === '1', saveThread, approvalMode,
